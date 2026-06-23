@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Donations — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .page-header { margin-bottom:1.5rem; }
+    .summary-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+    .stat-card { background:#fff; border-radius:8px; padding:1.25rem; box-shadow:0 2px 6px rgba(0,0,0,.07); text-align:center; }
+    .stat-card .label { font-size:.82rem; color:#888; margin-bottom:.4rem; }
+    .stat-card .value { font-size:1.5rem; font-weight:700; color:#0d6efd; }
+    .filters { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .filters select { padding:.4rem .7rem; border:1px solid #ccc; border-radius:4px; font-size:.9rem; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.07); }
+    th, td { padding:.75rem 1rem; text-align:left; border-bottom:1px solid #eee; font-size:.9rem; }
+    th { background:#f8f9fa; font-weight:600; color:#444; }
+    .badge-anon { background:#e2e3e5; color:#41464b; font-size:.75rem; padding:.15rem .45rem; border-radius:10px; }
+    .pagination { display:flex; gap:.4rem; justify-content:center; margin-top:1.5rem; }
+    .pagination button { padding:.35rem .75rem; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
+    .pagination button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    #empty { text-align:center; color:#888; padding:3rem; display:none; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="sb-page">
+  <div class="page-header">
+    <h1>All Donations</h1>
+    <p style="color:#888;margin:.25rem 0 0">Admin view — all donations across all campaigns</p>
+  </div>
+
+  <div class="summary-cards">
+    <div class="stat-card">
+      <div class="label">Total Donations</div>
+      <div class="value" id="stat-count">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Raised</div>
+      <div class="value" id="stat-total">—</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <select id="filter-campaign" onchange="currentPage=1;loadDonations()">
+      <option value="">All Campaigns</option>
+    </select>
+  </div>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>#</th><th>Donor</th><th>Campaign</th>
+        <th>Amount (Rs)</th><th>Date</th><th>Anon?</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="empty">No donations found.</div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('All Donations');
+
+  let currentPage = 1;
+  const PAGE_SIZE = 20;
+  let allItems    = [];
+
+  async function loadCampaignFilter() {
+    let res;
+    try { res = await apiFetch('/campaigns?pageSize=100'); } catch(e) { return; }
+    const sel = document.getElementById('filter-campaign');
+    res.data.items.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.campaignId; o.textContent = c.title;
+      sel.appendChild(o);
+    });
+  }
+
+  async function loadDonations() {
+    const params = new URLSearchParams({ page: currentPage, pageSize: PAGE_SIZE });
+    let res;
+    try { res = await apiFetch(`/admin/donations?${params}`); } catch(e) { return; }
+
+    const { items, totalCount, totalAmount } = res.data;
+    allItems = items;
+    document.getElementById('stat-count').textContent = totalCount.toLocaleString();
+    document.getElementById('stat-total').textContent = 'Rs ' + totalAmount.toLocaleString();
+
+    renderTable();
+    renderPagination(totalCount);
+  }
+
+  function renderTable() {
+    const campaignFilter = document.getElementById('filter-campaign').value;
+    const filtered = campaignFilter
+      ? allItems.filter(d => String(d.campaignId) === campaignFilter)
+      : allItems;
+
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
+    document.getElementById('table').style.display  = filtered.length ? 'table' : 'none';
+
+    filtered.forEach((d, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${(currentPage-1)*PAGE_SIZE+i+1}</td>
+        <td>${esc(d.donorName)}${d.isAnonymous?' <span class="badge-anon">anon</span>':''}</td>
+        <td>${esc(d.campaignTitle)}</td>
+        <td>${d.amount.toLocaleString()}</td>
+        <td>${new Date(d.donatedAt).toLocaleString()}</td>
+        <td>${d.isAnonymous?'Yes':'No'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderPagination(total) {
+    const pages = Math.ceil(total / PAGE_SIZE);
+    const el = document.getElementById('pagination');
+    el.innerHTML = '';
+    for (let i = 1; i <= pages; i++) {
+      const btn = document.createElement('button');
+      btn.textContent = i;
+      if (i === currentPage) btn.classList.add('active');
+      btn.onclick = () => { currentPage = i; loadDonations(); };
+      el.appendChild(btn);
+    }
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  loadCampaignFilter();
+  loadDonations();
+</script>
+</div>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Profile — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page" style="display:flex;justify-content:center;">
+  <div class="form-card-wide">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:10px;">
+      <h2 style="margin:0;">Edit Your Profile</h2>
+      <a href="inbox.html" id="inbox-link" style="font-size:.88rem;padding:7px 14px;border-radius:6px;background:#e3f2fd;color:#1565c0;text-decoration:none;font-weight:600;">
+        📬 Mentorship Inbox <span id="inbox-badge" style="display:none;background:#e53935;color:#fff;border-radius:10px;font-size:.72rem;padding:1px 7px;margin-left:4px;vertical-align:middle;"></span>
+      </a>
+    </div>
+
+    <div id="error-banner" style="background:#fdecea;padding:10px 14px;border-radius:6px;margin-bottom:16px;display:none;color:#c62828;font-size:.9rem;"></div>
+
+    <form id="profile-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="full-name" readonly style="background:#f5f5f5;" />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="email" readonly style="background:#f5f5f5;" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="graduation-year">Graduation Year *</label>
+          <input type="number" id="graduation-year" min="1950" placeholder="e.g. 2018" required />
+          <div class="error-msg" id="grad-year-error"></div>
+        </div>
+        <div class="form-group">
+          <label for="department">Department *</label>
+          <select id="department" required>
+            <option value="">Select department…</option>
+          </select>
+          <div class="error-msg" id="dept-error"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="degree-program">Degree Program *</label>
+        <input type="text" id="degree-program" placeholder="e.g. BS Computer Science" required />
+        <div class="error-msg" id="degree-error"></div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="current-company">Current Company</label>
+          <input type="text" id="current-company" placeholder="e.g. Google" />
+        </div>
+        <div class="form-group">
+          <label for="job-title">Job Title</label>
+          <input type="text" id="job-title" placeholder="e.g. Senior Engineer" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="industry">Industry</label>
+          <input type="text" id="industry" placeholder="e.g. Software, Finance" />
+        </div>
+        <div class="form-group">
+          <label for="work-location">Work Location</label>
+          <input type="text" id="work-location" placeholder="e.g. Karachi, Pakistan" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="linkedin-url">LinkedIn URL</label>
+        <input type="url" id="linkedin-url" placeholder="https://www.linkedin.com/in/yourprofile" />
+        <div class="error-msg" id="linkedin-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="short-bio">Short Bio</label>
+        <textarea id="short-bio" rows="4" placeholder="Tell us about yourself…" style="resize:vertical;"></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="save-btn">Save Changes</button>
+    </form>
+  </div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script src="../../js/utils.js"></script>
+<script>
+  requireAuth(['Alumni']);
+  renderSidebar('Edit Profile');
+
+  const currentYear = new Date().getFullYear();
+  document.getElementById('graduation-year').max = currentYear;
+
+  async function loadDepartments() {
+    const res = await apiFetch('/departments');
+    const select = document.getElementById('department');
+    (res.data || []).forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.departmentId;
+      opt.textContent = d.name;
+      select.appendChild(opt);
+    });
+  }
+
+  async function loadProfile() {
+    const res = await apiFetch('/alumni/me');
+    const p = res.data;
+    document.getElementById('full-name').value      = p.fullName       || '';
+    document.getElementById('email').value          = p.email          || '';
+    document.getElementById('graduation-year').value = p.graduationYear || '';
+    document.getElementById('department').value     = p.departmentId   || '';
+    document.getElementById('degree-program').value = p.degreeProgram  || '';
+    document.getElementById('current-company').value= p.currentCompany || '';
+    document.getElementById('job-title').value      = p.jobTitle       || '';
+    document.getElementById('industry').value       = p.industry       || '';
+    document.getElementById('work-location').value  = p.workLocation   || '';
+    document.getElementById('linkedin-url').value   = p.linkedInUrl    || '';
+    document.getElementById('short-bio').value      = p.shortBio       || '';
+  }
+
+  // Load pending mentorship count for badge
+  apiFetch('/mentorship/received?status=Pending&page=1&pageSize=1').then(res => {
+    const cnt   = res.data?.totalCount || 0;
+    const badge = document.getElementById('inbox-badge');
+    if (cnt > 0) { badge.textContent = cnt; badge.style.display = 'inline-block'; }
+  }).catch(() => {});
+
+  Promise.all([loadDepartments(), loadProfile()]).catch(err => {
+    const banner = document.getElementById('error-banner');
+    banner.textContent = err.message || 'Failed to load profile.';
+    banner.style.display = 'block';
+  });
+
+  document.getElementById('profile-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    ['grad-year-error','dept-error','degree-error','linkedin-error'].forEach(clearError);
+    const banner = document.getElementById('error-banner');
+    banner.style.display = 'none';
+
+    const gradYear = parseInt(document.getElementById('graduation-year').value);
+    const deptId   = parseInt(document.getElementById('department').value);
+    const degree   = document.getElementById('degree-program').value.trim();
+    const linkedin = document.getElementById('linkedin-url').value.trim();
+
+    let valid = true;
+    if (!gradYear || gradYear < 1950 || gradYear > currentYear) {
+      showError('grad-year-error', `Graduation year must be between 1950 and ${currentYear}.`);
+      valid = false;
+    }
+    if (!deptId) { showError('dept-error', 'Please select a department.'); valid = false; }
+    if (!degree)  { showError('degree-error', 'Degree program is required.'); valid = false; }
+    if (linkedin && !linkedin.toLowerCase().includes('linkedin.com')) {
+      showError('linkedin-error', "LinkedIn URL must contain 'linkedin.com'."); valid = false;
+    }
+    if (!valid) return;
+
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+      await apiFetch('/alumni/me', {
+        method: 'PUT',
+        body: JSON.stringify({
+          departmentId:   deptId,
+          graduationYear: gradYear,
+          degreeProgram:  degree,
+          currentCompany: document.getElementById('current-company').value.trim() || null,
+          jobTitle:       document.getElementById('job-title').value.trim()       || null,
+          industry:       document.getElementById('industry').value.trim()        || null,
+          workLocation:   document.getElementById('work-location').value.trim()   || null,
+          linkedInUrl:    linkedin || null,
+          shortBio:       document.getElementById('short-bio').value.trim()       || null,
+        })
+      });
+      showToast('Profile saved successfully!');
+    } catch (err) {
+      banner.textContent = err.message || 'Failed to save profile.';
+      banner.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Changes';
+    }
+  });
+</script>
+</div>
+</body>
+</html>

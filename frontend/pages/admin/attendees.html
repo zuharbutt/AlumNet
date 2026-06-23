@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendees — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; }
+    table { width:100%; border-collapse:collapse; background:#fff; }
+    th, td { padding:.65rem .9rem; border-bottom:1px solid #eee; font-size:.9rem; text-align:left; }
+    th { background:#f8f9fa; font-weight:600; }
+    .btn { padding:.4rem .9rem; border:none; border-radius:4px; cursor:pointer; font-size:.88rem; }
+    .btn-primary   { background:#0d6efd; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .check { width:1.1rem; height:1.1rem; cursor:pointer; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+    #event-info { background:#f8f9fa; padding:1rem; border-radius:6px; margin-bottom:1.25rem; font-size:.92rem; }
+    #event-info strong { color:#333; }
+    .btn-primary { width:auto; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <div class="page-header">
+    <h1>Attendees</h1>
+    <a href="events.html" class="btn btn-secondary">← Back to Events</a>
+  </div>
+
+  <div id="event-info">Loading event…</div>
+
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+    <button class="btn btn-primary" onclick="saveAttendance()">Save Attendance</button>
+    <button class="btn btn-secondary" onclick="selectAll(true)">Mark All Present</button>
+    <button class="btn btn-secondary" onclick="selectAll(false)">Clear All</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Attended</th><th>Name</th><th>Email</th><th>Ticket Code</th><th>Registered At</th>
+      </tr>
+    </thead>
+    <tbody id="attendees-tbody">
+      <tr><td colspan="5" style="text-align:center;color:#888;padding:2rem;">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Event Attendees');
+
+  const params  = new URLSearchParams(location.search);
+  const eventId = parseInt(params.get('id'));
+  if (!eventId) { location.href = 'events.html'; }
+
+  let attendees = [];
+
+  async function init() {
+    try {
+      const [evRes, attRes] = await Promise.all([
+        apiFetch(`/events/${eventId}`),
+        apiFetch(`/events/${eventId}/attendees`)
+      ]);
+      const ev = evRes.data;
+      document.getElementById('event-info').innerHTML =
+        `<strong>${escHtml(ev.title)}</strong> &nbsp;|&nbsp; ${new Date(ev.eventDate).toLocaleDateString('en-PK',{dateStyle:'medium'})}
+         &nbsp;|&nbsp; ${escHtml(ev.location)} &nbsp;|&nbsp; Registered: ${ev.registeredCount} / ${ev.capacity}`;
+
+      attendees = attRes.data || [];
+      renderTable(attendees);
+    } catch (e) {
+      showToast(e.message || 'Failed to load.', 'error');
+    }
+  }
+
+  function renderTable(list) {
+    const tbody = document.getElementById('attendees-tbody');
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:2rem;">No registered attendees.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(a => `
+      <tr>
+        <td><input type="checkbox" class="check" data-id="${a.registrationId}" ${a.attended ? 'checked' : ''} /></td>
+        <td>${escHtml(a.fullName)}</td>
+        <td>${escHtml(a.email)}</td>
+        <td><code>${escHtml(a.ticketCode)}</code></td>
+        <td>${new Date(a.registeredAt).toLocaleString('en-PK')}</td>
+      </tr>`).join('');
+  }
+
+  function selectAll(val) {
+    document.querySelectorAll('.check').forEach(c => c.checked = val);
+  }
+
+  async function saveAttendance() {
+    const attended = Array.from(document.querySelectorAll('.check:checked'))
+      .map(c => parseInt(c.dataset.id));
+    try {
+      await apiFetch(`/events/${eventId}/attendance`, {
+        method: 'PUT',
+        body: JSON.stringify(attended)
+      });
+      showToast('Attendance saved.', 'success');
+    } catch (e) {
+      showToast(e.message || 'Failed to save.', 'error');
+    }
+  }
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type}`;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3500);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</div>
+</body>
+</html>

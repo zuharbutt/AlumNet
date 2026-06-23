@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register — AlumniMS</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+
+<nav style="background:#1a237e;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 24px;height:56px;">
+  <a href="index.html" style="font-size:1.25rem;font-weight:700;color:#fff;text-decoration:none;">AlumniMS</a>
+</nav>
+
+<div class="page-center" style="padding:32px 24px;">
+  <div class="form-card" style="max-width:500px;">
+    <h2 style="margin-bottom:24px;text-align:center;">Create Account</h2>
+
+    <div id="error-banner" class="error-msg" style="background:#fdecea;padding:10px;border-radius:6px;margin-bottom:16px;display:none;"></div>
+
+    <form id="register-form" novalidate>
+
+      <!-- Role selector -->
+      <div class="form-group">
+        <label>Select Role</label>
+        <div class="role-selector">
+          <button type="button" class="role-btn active" data-role="Student">Student</button>
+          <button type="button" class="role-btn" data-role="Alumni">Alumni</button>
+        </div>
+        <input type="hidden" id="role" value="Student" />
+        <div class="error-msg" id="role-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="fullName">Full Name</label>
+        <input type="text" id="fullName" placeholder="Ali Khan" required />
+        <div class="error-msg" id="fullName-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" placeholder="you@example.com" required />
+        <div class="error-msg" id="email-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone (optional)</label>
+        <input type="tel" id="phone" placeholder="+923001234567" />
+        <div class="error-msg" id="phone-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="dob">Date of Birth (optional)</label>
+        <input type="date" id="dob" />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special" required />
+        <div class="error-msg" id="password-error"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input type="password" id="confirmPassword" placeholder="Re-enter password" required />
+        <div class="error-msg" id="confirmPassword-error"></div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="submit-btn">Create Account</button>
+    </form>
+
+    <p style="text-align:center;margin-top:18px;font-size:.9rem;">
+      Already have an account? <a href="login.html">Login here</a>
+    </p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/validators.js"></script>
+<script>
+  if (isLoggedIn()) redirectToDashboard(getUser()?.role);
+
+  // Role selector
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('role').value = btn.dataset.role;
+    });
+  });
+
+  document.getElementById('register-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    ['fullName-error','email-error','phone-error','password-error','confirmPassword-error'].forEach(clearError);
+    const banner = document.getElementById('error-banner');
+    banner.style.display = 'none';
+
+    const fullName  = document.getElementById('fullName').value.trim();
+    const email     = document.getElementById('email').value.trim();
+    const phone     = document.getElementById('phone').value.trim() || null;
+    const dob       = document.getElementById('dob').value || null;
+    const password  = document.getElementById('password').value;
+    const confirmPw = document.getElementById('confirmPassword').value;
+    const role      = document.getElementById('role').value;
+
+    let valid = true;
+    if (!fullName)                     { showError('fullName-error', 'Full name is required.');        valid = false; }
+    if (!email || !validateEmail(email)){ showError('email-error', 'Valid email is required.');        valid = false; }
+    if (!validatePassword(password))   { showError('password-error', 'Password must be ≥8 chars with 1 uppercase, 1 number, 1 special char.'); valid = false; }
+    if (password !== confirmPw)        { showError('confirmPassword-error', 'Passwords do not match.'); valid = false; }
+    if (!valid) return;
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true; btn.textContent = 'Creating account…';
+
+    try {
+      await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ fullName, email, password, confirmPassword: confirmPw, role, phone, dateOfBirth: dob })
+      });
+      window.location.href = 'login.html?registered=1';
+    } catch (err) {
+      banner.textContent = err.message || 'Registration failed.';
+      banner.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  });
+</script>
+</body>
+</html>

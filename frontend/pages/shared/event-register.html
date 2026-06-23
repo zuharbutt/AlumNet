@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register for Event — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .reg-card { background:#fff; border-radius:8px; padding:2rem; max-width:540px; margin:2rem auto; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .reg-card h2 { margin:0 0 .25rem; }
+    .event-summary { background:#f8f9fa; border-radius:6px; padding:1rem; margin-bottom:1.5rem; font-size:.92rem; line-height:1.7; }
+    .alert { padding:.9rem 1.1rem; border-radius:6px; margin-bottom:1.25rem; font-size:.9rem; }
+    .alert-warning { background:#fff3cd; color:#664d03; border-left:4px solid #ffc107; }
+    .form-group { margin-bottom:1rem; }
+    label { display:block; font-weight:600; margin-bottom:.35rem; font-size:.9rem; }
+    input { width:100%; padding:.5rem .75rem; border:1px solid #ccc; border-radius:4px; font-size:.95rem; box-sizing:border-box; }
+    .btn { padding:.6rem 1.4rem; border:none; border-radius:4px; cursor:pointer; font-size:.95rem; }
+    .btn-primary   { background:#0d6efd; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .btn + .btn    { margin-left:.75rem; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+    .success-box { text-align:center; padding:2rem 1rem; }
+    .success-box .tick { font-size:3rem; }
+    .success-box h3 { margin:.5rem 0; }
+    .success-box p  { color:#555; }
+    .ticket-code { font-size:1.3rem; font-weight:700; letter-spacing:.1em; background:#e0f2e9; color:#0a3622; padding:.4rem 1rem; border-radius:6px; display:inline-block; margin:.75rem 0; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <a href="events.html" style="font-size:.9rem;color:#0d6efd;text-decoration:none;">← Back to Events</a>
+
+  <div class="reg-card" id="reg-card" style="display:none;">
+    <h2 id="ev-title">Register</h2>
+    <div class="event-summary" id="ev-summary"></div>
+
+    <!-- Success state (shown after registration) -->
+    <div class="success-box" id="success-box" style="display:none;">
+      <div class="tick">🎟️</div>
+      <h3>Registration Successful!</h3>
+      <p>Your ticket code:</p>
+      <div class="ticket-code" id="ticket-code-display"></div>
+      <p style="font-size:.88rem;color:#888;">Save this code — it will also appear in My Tickets.</p>
+    </div>
+
+    <!-- Registration form -->
+    <div id="form-area">
+      <!-- Mock payment section (shown for paid events) -->
+      <div id="payment-section" style="display:none;">
+        <div class="alert alert-warning">
+          <strong>⚠️ Simulated Payment</strong><br>
+          This is a simulated payment for academic purposes. No real transaction will occur. Do not enter real card details.
+        </div>
+        <div class="form-group">
+          <label>Card Number</label>
+          <input type="text" id="card-number" maxlength="19" placeholder="1234 5678 9012 3456" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div class="form-group">
+            <label>Expiry (MM/YY)</label>
+            <input type="text" id="card-expiry" maxlength="5" placeholder="12/27" />
+          </div>
+          <div class="form-group">
+            <label>CVV</label>
+            <input type="text" id="card-cvv" maxlength="4" placeholder="123" />
+          </div>
+        </div>
+      </div>
+
+      <div class="price-summary" id="price-summary" style="margin-bottom:1.25rem;font-size:.95rem;"></div>
+
+      <div style="display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; margin-top:.25rem;">
+        <button class="btn btn-primary" id="confirm-btn" onclick="confirmRegistration()">
+          <span id="btn-label">Confirm Registration</span>
+        </button>
+        <a href="events.html" class="btn btn-secondary">Cancel</a>
+      </div>
+    </div>
+  </div>
+
+  <p id="loading-msg" style="text-align:center;color:#888;margin-top:3rem;">Loading…</p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni','Student','Admin']);
+  renderSidebar('Register for Event');
+
+  const params  = new URLSearchParams(location.search);
+  const eventId = parseInt(params.get('id'));
+  if (!eventId) { location.href = 'events.html'; }
+
+  let eventData = null;
+
+  async function init() {
+    try {
+      const res = await apiFetch(`/events/${eventId}`);
+      eventData = res.data;
+
+      if (eventData.isRegistered) {
+        location.href = `event-detail.html?id=${eventId}`;
+        return;
+      }
+      if (eventData.isFull || eventData.status !== 'Scheduled') {
+        location.href = `event-detail.html?id=${eventId}`;
+        return;
+      }
+
+      document.getElementById('ev-title').textContent = eventData.title;
+      document.getElementById('ev-summary').innerHTML =
+        `📅 ${new Date(eventData.eventDate).toLocaleString('en-PK',{dateStyle:'long',timeStyle:'short'})}<br>` +
+        `📍 ${escHtml(eventData.location)}<br>` +
+        `👥 ${eventData.seatsRemaining} seat(s) remaining`;
+
+      const isFree = eventData.ticketPrice === 0;
+      document.getElementById('price-summary').textContent =
+        isFree ? 'This is a free event. No payment required.' : `Amount to pay: PKR ${eventData.ticketPrice.toLocaleString()}`;
+
+      if (!isFree) {
+        document.getElementById('payment-section').style.display = 'block';
+        document.getElementById('btn-label').textContent = 'Pay Now & Register';
+      }
+
+      document.getElementById('loading-msg').style.display = 'none';
+      document.getElementById('reg-card').style.display = 'block';
+    } catch (e) {
+      document.getElementById('loading-msg').textContent = e.message || 'Failed to load event.';
+    }
+  }
+
+  async function confirmRegistration() {
+    const btn = document.getElementById('confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+
+    try {
+      const res = await apiFetch(`/events/${eventId}/register`, { method: 'POST' });
+      const ticket = res.data;
+
+      document.getElementById('ticket-code-display').textContent = ticket.ticketCode;
+      document.getElementById('form-area').style.display    = 'none';
+      document.getElementById('ev-summary').style.display   = 'none';
+      document.getElementById('success-box').style.display  = 'block';
+      setTimeout(() => { location.href = 'events.html'; }, 2500);
+    } catch (e) {
+      showToast(e.message || 'Registration failed.', 'error');
+      btn.disabled = false;
+      btn.textContent = document.getElementById('btn-label')?.textContent || 'Confirm Registration';
+    }
+  }
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type}`;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 4000);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  init();
+</script>
+</div>
+</body>
+</html>

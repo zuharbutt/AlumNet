@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+  <div class="sb-page">
+    <h1 id="welcome-h">System Dashboard</h1>
+    <p class="page-subtitle">Overview of all platform activity</p>
+
+    <div id="spinner" class="spinner"></div>
+
+    <div id="stats" style="display:none;">
+      <div class="sb-stat-grid">
+        <div class="sb-stat-card">
+          <div class="card-icon icon-indigo">🎓</div>
+          <div class="card-body">
+            <div class="card-value" id="alumni-count">—</div>
+            <div class="card-label">Total Alumni</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-blue">📚</div>
+          <div class="card-body">
+            <div class="card-value" id="students-count">—</div>
+            <div class="card-label">Total Students</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-teal">📅</div>
+          <div class="card-body">
+            <div class="card-value" id="events-count">—</div>
+            <div class="card-label">Upcoming Events</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-amber">📣</div>
+          <div class="card-body">
+            <div class="card-value" id="campaigns-count">—</div>
+            <div class="card-label">Active Campaigns</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-green">💰</div>
+          <div class="card-body">
+            <div class="card-value" id="total-raised">—</div>
+            <div class="card-label">Total Raised (PKR)</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-purple">🧾</div>
+          <div class="card-body">
+            <div class="card-value" id="total-donations">—</div>
+            <div class="card-label">Total Donations</div>
+          </div>
+        </div>
+        <div class="sb-stat-card" id="mentorship-card">
+          <div class="card-icon icon-rose">🤝</div>
+          <div class="card-body">
+            <div class="card-value" id="pending-mentorship">—</div>
+            <div class="card-label">Pending Mentorships</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-card">
+        <h3>Quick Links</h3>
+        <div class="sb-quick-grid">
+          <a href="events.html" class="sb-quick-link"><span>📅</span> Manage Events</a>
+          <a href="campaigns.html" class="sb-quick-link"><span>📣</span> Manage Campaigns</a>
+          <a href="users.html" class="sb-quick-link"><span>👥</span> View All Users</a>
+          <a href="mentorship.html" class="sb-quick-link"><span>🤝</span> Mentorship Requests</a>
+          <a href="reports.html" class="sb-quick-link"><span>📈</span> Reports</a>
+        </div>
+      </div>
+    </div>
+
+    <div id="error-msg" style="display:none; color:#d32f2f; padding:16px; background:#fff; border-radius:8px;"></div>
+  </div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('System Dashboard');
+
+  apiFetch('/dashboards/admin')
+    .then(res => {
+      const d = res.data || {};
+      const pending = d.pendingMentorships ?? 0;
+
+      document.getElementById('alumni-count').textContent    = d.totalAlumni      ?? 0;
+      document.getElementById('students-count').textContent  = d.totalStudents    ?? 0;
+      document.getElementById('events-count').textContent    = d.upcomingEvents   ?? 0;
+      document.getElementById('campaigns-count').textContent = d.activeCampaigns  ?? 0;
+      document.getElementById('total-raised').textContent    =
+        d.totalRaised != null ? Number(d.totalRaised).toLocaleString() : '0';
+      document.getElementById('total-donations').textContent = d.totalDonations   ?? 0;
+      document.getElementById('pending-mentorship').textContent = pending;
+
+      if (pending > 0) {
+        document.getElementById('mentorship-card').style.borderLeft = '3px solid #e11d48';
+      }
+
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('stats').style.display   = 'block';
+    })
+    .catch(() => {
+      document.getElementById('spinner').style.display = 'none';
+      const el = document.getElementById('error-msg');
+      el.textContent = 'Could not load dashboard data. Please refresh.';
+      el.style.display = 'block';
+    });
+</script>
+</body>
+</html>

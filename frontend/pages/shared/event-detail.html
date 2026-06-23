@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Detail — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .detail-card { background:#fff; border-radius:8px; padding:2rem; max-width:720px; margin:2rem auto; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .detail-card h2 { margin:0 0 .5rem; }
+    .category-badge { display:inline-block; background:#e0e7ff; color:#3730a3; padding:.2rem .65rem; border-radius:12px; font-size:.82rem; font-weight:600; margin-bottom:1rem; }
+    .meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:.6rem 1.5rem; margin-bottom:1.5rem; font-size:.92rem; }
+    .meta-item strong { display:block; font-size:.78rem; color:#888; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+    .description { color:#444; line-height:1.7; margin-bottom:1.5rem; white-space:pre-wrap; }
+    .action-box { background:#f8f9fa; border-radius:8px; padding:1.25rem; }
+    .action-box .price { font-size:1.4rem; font-weight:700; color:#0d6efd; margin-bottom:.75rem; }
+    .btn { padding:.6rem 1.4rem; border:none; border-radius:4px; cursor:pointer; font-size:.95rem; }
+    .btn-primary   { background:#0d6efd; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .btn-success   { background:#198754; color:#fff; cursor:default; }
+    .btn-disabled  { background:#adb5bd; color:#fff; cursor:not-allowed; }
+    .seats-bar { background:#e9ecef; border-radius:4px; height:8px; margin-bottom:.5rem; }
+    .seats-fill { background:#0d6efd; border-radius:4px; height:100%; transition:width .4s; }
+    .seats-label { font-size:.82rem; color:#555; margin-bottom:1rem; }
+    .alert { padding:.9rem 1.1rem; border-radius:6px; margin-bottom:1rem; font-size:.9rem; }
+    .alert-success { background:#d1e7dd; color:#0a3622; }
+    .alert-warning { background:#fff3cd; color:#664d03; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <a href="events.html" style="font-size:.9rem;color:#0d6efd;text-decoration:none;">← Back to Events</a>
+
+  <div class="detail-card" id="detail-card" style="display:none;">
+    <span class="category-badge" id="cat-badge"></span>
+    <h2 id="ev-title"></h2>
+
+    <div class="meta-grid">
+      <div class="meta-item"><strong>Date & Time</strong><span id="ev-date"></span></div>
+      <div class="meta-item"><strong>Location</strong><span id="ev-location"></span></div>
+      <div class="meta-item"><strong>Capacity</strong><span id="ev-capacity"></span></div>
+      <div class="meta-item"><strong>Status</strong><span id="ev-status"></span></div>
+    </div>
+
+    <div class="description" id="ev-desc"></div>
+
+    <div class="seats-bar"><div class="seats-fill" id="seats-fill"></div></div>
+    <div class="seats-label" id="seats-label"></div>
+
+    <div class="action-box">
+      <div class="price" id="ev-price"></div>
+      <div id="action-area"></div>
+    </div>
+  </div>
+
+  <p id="loading-msg" style="text-align:center;color:#888;margin-top:3rem;">Loading event…</p>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni','Student','Admin']);
+  renderSidebar('Event Detail');
+
+  const params  = new URLSearchParams(location.search);
+  const eventId = parseInt(params.get('id'));
+  if (!eventId) { location.href = 'events.html'; }
+
+  async function init() {
+    try {
+      const res = await apiFetch(`/events/${eventId}`);
+      const ev  = res.data;
+
+      document.getElementById('cat-badge').textContent  = ev.category;
+      document.getElementById('ev-title').textContent   = ev.title;
+      document.getElementById('ev-date').textContent    =
+        new Date(ev.eventDate).toLocaleString('en-PK',{dateStyle:'long',timeStyle:'short'});
+      document.getElementById('ev-location').textContent = ev.location;
+      document.getElementById('ev-capacity').textContent = `${ev.capacity} seats`;
+      document.getElementById('ev-status').textContent   = ev.status;
+      document.getElementById('ev-desc').textContent     = ev.description || 'No description provided.';
+      document.getElementById('ev-price').textContent    = ev.ticketPrice === 0 ? 'Free' : `PKR ${ev.ticketPrice.toLocaleString()}`;
+
+      const pct = ev.capacity > 0 ? Math.min(100, Math.round(ev.registeredCount / ev.capacity * 100)) : 0;
+      document.getElementById('seats-fill').style.width  = pct + '%';
+      document.getElementById('seats-label').textContent =
+        `${ev.seatsRemaining} seat(s) remaining out of ${ev.capacity}`;
+
+      const area = document.getElementById('action-area');
+      if (ev.status === 'Cancelled') {
+        area.innerHTML = '<div class="alert alert-warning">This event has been cancelled.</div>';
+      } else if (ev.isRegistered) {
+        area.innerHTML = `
+          <div class="alert alert-success">You are registered for this event.</div>
+          <a href="my-tickets.html" class="btn btn-success">View My Tickets</a>`;
+      } else if (ev.isFull) {
+        area.innerHTML = '<button class="btn btn-disabled" disabled>Event Full</button>';
+      } else {
+        area.innerHTML =
+          `<button class="btn btn-primary" onclick="goRegister()">Register${ev.ticketPrice > 0 ? ' & Pay' : ''}</button>`;
+      }
+
+      document.getElementById('loading-msg').style.display = 'none';
+      document.getElementById('detail-card').style.display = 'block';
+    } catch (e) {
+      document.getElementById('loading-msg').textContent = e.message || 'Event not found.';
+    }
+  }
+
+  function goRegister() {
+    location.href = `event-register.html?id=${eventId}`;
+  }
+
+  init();
+</script>
+</div>
+</body>
+</html>

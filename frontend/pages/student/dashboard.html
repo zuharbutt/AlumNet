@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Dashboard — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+  <div class="sb-page">
+    <h1 id="welcome-h">Welcome</h1>
+    <p class="page-subtitle">Your mentorship activity and upcoming events at a glance.</p>
+
+    <div id="spinner" class="spinner"></div>
+
+    <div id="stats" style="display:none;">
+      <div class="sb-stat-grid">
+        <div class="sb-stat-card">
+          <div class="card-icon icon-indigo">✉️</div>
+          <div class="card-body">
+            <div class="card-value" id="sent-count">—</div>
+            <div class="card-label">Requests Sent</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-green">🤝</div>
+          <div class="card-body">
+            <div class="card-value" id="accepted-count">—</div>
+            <div class="card-label">Accepted Mentors</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-blue">📅</div>
+          <div class="card-body">
+            <div class="card-value" id="upcoming-count">—</div>
+            <div class="card-label">Upcoming Events</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-amber">🎟️</div>
+          <div class="card-body">
+            <div class="card-value" id="registered-count">—</div>
+            <div class="card-label">My Registrations</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-card">
+        <h3>Quick Links</h3>
+        <div class="sb-quick-grid">
+          <a href="alumni-directory.html" class="sb-quick-link"><span>🔍</span> Browse Alumni</a>
+          <a href="../shared/events.html" class="sb-quick-link"><span>📅</span> View Events</a>
+          <a href="profile.html" class="sb-quick-link"><span>👤</span> Edit Profile</a>
+          <a href="my-requests.html" class="sb-quick-link"><span>🤝</span> My Requests</a>
+          <a href="../shared/my-tickets.html" class="sb-quick-link"><span>🎫</span> My Tickets</a>
+        </div>
+      </div>
+    </div>
+
+    <div id="error-msg" style="display:none; color:#d32f2f; padding:16px; background:#fff; border-radius:8px;"></div>
+  </div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Student']);
+  renderSidebar('My Dashboard');
+
+  const user = getUser();
+  document.getElementById('welcome-h').textContent = `Welcome, ${user?.fullName ?? 'Student'}`;
+
+  apiFetch('/dashboards/student')
+    .then(res => {
+      const d = res.data || {};
+      document.getElementById('sent-count').textContent       = d.sentRequestsCount     ?? 0;
+      document.getElementById('accepted-count').textContent   = d.acceptedMentorsCount  ?? 0;
+      document.getElementById('upcoming-count').textContent   = d.upcomingEventsCount   ?? 0;
+      document.getElementById('registered-count').textContent = d.registeredEventsCount ?? 0;
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('stats').style.display   = 'block';
+    })
+    .catch(() => {
+      document.getElementById('spinner').style.display = 'none';
+      const el = document.getElementById('error-msg');
+      el.textContent = 'Could not load dashboard data. Please refresh.';
+      el.style.display = 'block';
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invite Codes — AlumniMS Admin</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .badge-used   { background:#e8f5e9; color:#2e7d32; padding:2px 10px; border-radius:10px; font-size:.78rem; font-weight:600; }
+    .badge-unused { background:#e8f0fe; color:#1a237e; padding:2px 10px; border-radius:10px; font-size:.78rem; font-weight:600; }
+    .badge-expired{ background:#fce4ec; color:#c62828; padding:2px 10px; border-radius:10px; font-size:.78rem; font-weight:600; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+<div id="main-content">
+  <div id="topbar"></div>
+  <div class="sb-page">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+      <div><h1>Invite Codes</h1><p class="page-subtitle">Generate and manage admin registration codes</p></div>
+      <button class="btn-indigo" onclick="generateCode()">+ Generate New Code</button>
+    </div>
+    <div id="gen-msg" style="display:none; margin-bottom:16px; padding:12px 16px; border-radius:8px; font-size:.9rem;"></div>
+    <div class="sb-card">
+      <div id="spinner" class="spinner"></div>
+      <table class="sb-table" id="codes-table" style="display:none;">
+        <thead><tr><th>#</th><th>Code</th><th>Status</th><th>Created</th><th>Expires</th><th>Used By</th></tr></thead>
+        <tbody id="codes-body"></tbody>
+      </table>
+      <div id="no-data" style="display:none; text-align:center; padding:48px; color:#888;">No invite codes found.</div>
+    </div>
+  </div>
+</div>
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Invite Codes');
+  function loadCodes() {
+    document.getElementById('spinner').style.display='block';
+    document.getElementById('codes-table').style.display='none';
+    document.getElementById('no-data').style.display='none';
+    apiFetch('/admin/invite-codes').then(res => {
+      document.getElementById('spinner').style.display='none';
+      const codes = res.data?.codes || res.data || [];
+      if (!codes.length){document.getElementById('no-data').style.display='block';return;}
+      const now=new Date();
+      document.getElementById('codes-body').innerHTML=codes.map((c,i)=>{
+        const expired=new Date(c.expiryDate)<now;
+        const badge=c.isUsed?'badge-used':(expired?'badge-expired':'badge-unused');
+        const status=c.isUsed?'Used':(expired?'Expired':'Unused');
+        return `<tr><td>${i+1}</td><td><code style="background:#f1f5f9;padding:2px 8px;border-radius:4px;">${esc(c.code)}</code></td><td><span class="${badge}">${status}</span></td><td>${new Date(c.createdAt).toLocaleDateString()}</td><td>${new Date(c.expiryDate).toLocaleDateString()}</td><td>${c.usedByUserId?'User #'+c.usedByUserId:'—'}</td></tr>`;
+      }).join('');
+      document.getElementById('codes-table').style.display='table';
+    }).catch(err=>{document.getElementById('spinner').style.display='none';showMsg('Could not load: '+(err.message||'error'),false);});
+  }
+  function generateCode() {
+    const expiry=new Date(); expiry.setDate(expiry.getDate()+30);
+    apiFetch('/admin/invite-codes',{method:'POST',body:JSON.stringify({expiryDate:expiry.toISOString()})})
+      .then(res=>{showMsg('Code generated: '+(res.data?.code||'done'),true);loadCodes();})
+      .catch(err=>showMsg('Failed: '+(err.message||'error'),false));
+  }
+  function showMsg(text,ok){const el=document.getElementById('gen-msg');el.textContent=text;el.style.background=ok?'#e8f5e9':'#fce4ec';el.style.color=ok?'#2e7d32':'#c62828';el.style.display='block';setTimeout(()=>el.style.display='none',5000);}
+  function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  loadCodes();
+</script>
+</body>
+</html>

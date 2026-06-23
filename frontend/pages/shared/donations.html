@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Donation Campaigns — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .page-header { margin-bottom:1.5rem; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1.25rem; }
+    .campaign-card { background:#fff; border-radius:8px; padding:1.25rem; box-shadow:0 2px 6px rgba(0,0,0,.07); display:flex; flex-direction:column; }
+    .campaign-card h3 { margin:0 0 .5rem; font-size:1.05rem; }
+    .campaign-card .desc { font-size:.88rem; color:#555; margin-bottom:.75rem; line-height:1.5; flex:1; }
+    .progress { height:10px; background:#e9ecef; border-radius:5px; margin:.5rem 0; }
+    .progress-bar { height:100%; background:#198754; border-radius:5px; transition:width .4s; }
+    .meta { display:flex; justify-content:space-between; font-size:.82rem; color:#666; margin-top:.25rem; }
+    .badge-closed { display:inline-block; background:#dc3545; color:#fff; font-size:.78rem; padding:.2rem .55rem; border-radius:12px; margin-bottom:.5rem; }
+    .btn { display:block; text-align:center; padding:.55rem 1.25rem; border:none; border-radius:4px; cursor:pointer; font-size:.95rem; text-decoration:none; margin-top:.75rem; }
+    .btn-primary  { background:#0d6efd; color:#fff; }
+    .btn-disabled { background:#adb5bd; color:#fff; cursor:not-allowed; pointer-events:none; }
+    .pagination { display:flex; gap:.4rem; justify-content:center; margin-top:1.5rem; }
+    .pagination button { padding:.35rem .75rem; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
+    .pagination button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    #empty { text-align:center; color:#888; padding:3rem; display:none; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="sb-page">
+  <div class="page-header">
+    <h1>Donation Campaigns</h1>
+    <p style="color:#888;margin:.25rem 0 0">Support university initiatives by donating to active campaigns.</p>
+  </div>
+
+  <div class="cards" id="cards"></div>
+  <div id="empty">No active campaigns at the moment.</div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni', 'Student', 'Admin']);
+  renderSidebar('Campaigns');
+
+  const user      = getUser();
+  const canDonate = user && user.role === 'Alumni';
+  let currentPage = 1;
+
+  async function loadCampaigns() {
+    const params = new URLSearchParams({ status:'Active', page:currentPage, pageSize:9 });
+    let res;
+    try { res = await apiFetch(`/campaigns?${params}`); } catch(e) { return; }
+
+    const { items, totalCount } = res.data;
+    const cards = document.getElementById('cards');
+    cards.innerHTML = '';
+    document.getElementById('empty').style.display = items.length ? 'none' : 'block';
+
+    items.forEach(c => {
+      const pct      = Math.min(c.progressPercent, 100).toFixed(1);
+      const isActive = c.status === 'Active' && new Date(c.endDate) > new Date();
+      const endDate  = new Date(c.endDate).toLocaleDateString();
+
+      const div = document.createElement('div');
+      div.className = 'campaign-card';
+      div.innerHTML = `
+        ${!isActive ? '<span class="badge-closed">Campaign Closed</span>' : ''}
+        <h3>${esc(c.title)}</h3>
+        <p class="desc">${esc(c.description.length > 150 ? c.description.slice(0,150)+'…' : c.description)}</p>
+        <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
+        <div class="meta">
+          <span>Rs ${c.raisedAmount.toLocaleString()} raised</span>
+          <span>${pct}% of Rs ${c.targetAmount.toLocaleString()}</span>
+        </div>
+        <div class="meta"><span>Ends: ${endDate}</span></div>
+        ${canDonate && isActive
+          ? `<a href="/frontend/pages/shared/donate.html?id=${c.campaignId}" class="btn btn-primary">Donate</a>`
+          : `<button class="btn btn-disabled">${isActive ? 'Login as Alumni to donate' : 'Campaign Closed'}</button>`
+        }`;
+      cards.appendChild(div);
+    });
+
+    renderPagination(totalCount, 9);
+  }
+
+  function renderPagination(total, pageSize) {
+    const pages = Math.ceil(total / pageSize);
+    const el = document.getElementById('pagination');
+    el.innerHTML = '';
+    for (let i = 1; i <= pages; i++) {
+      const btn = document.createElement('button');
+      btn.textContent = i;
+      if (i === currentPage) btn.classList.add('active');
+      btn.onclick = () => { currentPage = i; loadCampaigns(); };
+      el.appendChild(btn);
+    }
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  loadCampaigns();
+</script>
+</div>
+</body>
+</html>

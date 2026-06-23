@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Form — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .form-card { background:#fff; border-radius:8px; padding:2rem; max-width:680px; margin:2rem auto; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .form-card h2 { margin:0 0 1.5rem; }
+    .form-group { margin-bottom:1.1rem; }
+    label { display:block; font-weight:600; margin-bottom:.35rem; font-size:.9rem; }
+    input, select, textarea { width:100%; padding:.5rem .75rem; border:1px solid #ccc; border-radius:4px; font-size:.95rem; box-sizing:border-box; }
+    textarea { resize:vertical; }
+    .err { color:#dc3545; font-size:.82rem; margin-top:.25rem; display:none; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .btn { padding:.55rem 1.25rem; border:none; border-radius:4px; cursor:pointer; font-size:.95rem; }
+    .btn-primary   { background:#0d6efd; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+    .btn-row { display:flex; gap:.75rem; margin-top:1.5rem; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="form-card">
+  <h2 id="page-title">Create Event</h2>
+
+  <div class="form-group">
+    <label for="title">Title *</label>
+    <input type="text" id="title" maxlength="200" placeholder="Event title" />
+    <div class="err" id="err-title">Title is required.</div>
+  </div>
+
+  <div class="form-group">
+    <label for="description">Description</label>
+    <textarea id="description" rows="4" maxlength="2000" placeholder="Event description (optional)"></textarea>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="category">Category *</label>
+      <select id="category">
+        <option value="">Select category</option>
+        <option>Reunion</option><option>Seminar</option><option>Workshop</option>
+        <option>Networking</option><option>Conference</option><option>Other</option>
+      </select>
+      <div class="err" id="err-category">Category is required.</div>
+    </div>
+    <div class="form-group">
+      <label for="event-date">Event Date & Time *</label>
+      <input type="datetime-local" id="event-date" />
+      <div class="err" id="err-date">Must be at least 24 hours in the future.</div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="location">Location *</label>
+    <input type="text" id="location" maxlength="300" placeholder="Venue or online link" />
+    <div class="err" id="err-location">Location is required.</div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="capacity">Capacity *</label>
+      <input type="number" id="capacity" min="1" placeholder="Max attendees" />
+      <div class="err" id="err-capacity">Capacity must be at least 1.</div>
+    </div>
+    <div class="form-group">
+      <label for="ticket-price">Ticket Price (PKR)</label>
+      <input type="number" id="ticket-price" min="0" step="0.01" placeholder="0 = Free" value="0" />
+      <div class="err" id="err-price">Price cannot be negative.</div>
+    </div>
+
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" id="submit-btn" onclick="submitForm()">Save Event</button>
+    <a href="events.html" class="btn btn-secondary">Cancel</a>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Event Form');
+
+  const params  = new URLSearchParams(location.search);
+  const eventId = params.get('id') ? parseInt(params.get('id')) : null;
+
+  if (eventId) {
+    document.getElementById('page-title').textContent = 'Edit Event';
+    apiFetch(`/events/${eventId}`).then(res => {
+      const ev = res.data;
+      document.getElementById('title').value        = ev.title;
+      document.getElementById('description').value  = ev.description || '';
+      document.getElementById('category').value     = ev.category;
+      document.getElementById('location').value     = ev.location;
+      document.getElementById('capacity').value     = ev.capacity;
+      document.getElementById('ticket-price').value = ev.ticketPrice;
+      // Convert UTC to local datetime-local string
+      const d = new Date(ev.eventDate);
+      const pad = n => String(n).padStart(2,'0');
+      document.getElementById('event-date').value =
+        `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }).catch(e => showToast(e.message || 'Failed to load event.', 'error'));
+  }
+
+  function clearErrors() {
+    document.querySelectorAll('.err').forEach(e => e.style.display = 'none');
+  }
+
+  function showError(id) {
+    document.getElementById(id).style.display = 'block';
+  }
+
+  function validate() {
+    clearErrors();
+    let ok = true;
+    if (!document.getElementById('title').value.trim())      { showError('err-title');    ok = false; }
+    if (!document.getElementById('category').value)          { showError('err-category'); ok = false; }
+    if (!document.getElementById('location').value.trim())   { showError('err-location'); ok = false; }
+    const cap = parseInt(document.getElementById('capacity').value);
+    if (isNaN(cap) || cap < 1)                               { showError('err-capacity'); ok = false; }
+    const priceVal = document.getElementById('ticket-price').value.trim();
+    const price = parseFloat(priceVal);
+    if (priceVal === '') {
+      document.getElementById('err-price').textContent = 'Please enter the price.';
+      showError('err-price'); ok = false;
+    } else if (isNaN(price) || price < 0) {
+      document.getElementById('err-price').textContent = 'Price cannot be negative.';
+      showError('err-price'); ok = false;
+    }
+    const dateVal = document.getElementById('event-date').value;
+    if (!dateVal) { showError('err-date'); ok = false; }
+    else {
+      const d = new Date(dateVal);
+      if (d <= new Date(Date.now() + 24 * 60 * 60 * 1000))  { showError('err-date');     ok = false; }
+    }
+    return ok;
+  }
+
+  async function submitForm() {
+    if (!validate()) return;
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+
+    const body = {
+      title:       document.getElementById('title').value.trim(),
+      description: document.getElementById('description').value.trim() || null,
+      category:    document.getElementById('category').value,
+      eventDate:   new Date(document.getElementById('event-date').value).toISOString(),
+      location:    document.getElementById('location').value.trim(),
+      capacity:    parseInt(document.getElementById('capacity').value),
+      ticketPrice: parseFloat(document.getElementById('ticket-price').value) || 0,
+    };
+
+    try {
+      if (eventId) {
+        await apiFetch(`/events/${eventId}`, { method: 'PUT', body: JSON.stringify(body) });
+        showToast('Event updated successfully.', 'success');
+      } else {
+        await apiFetch('/events', { method: 'POST', body: JSON.stringify(body) });
+        showToast('Event created successfully.', 'success');
+      }
+      setTimeout(() => { location.href = 'events.html'; }, 1200);
+    } catch (e) {
+      showToast(e.message || 'Failed to save event.', 'error');
+      btn.disabled = false;
+    }
+  }
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type}`;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3500);
+  }
+</script>
+</div>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mentorship Requests — AlumniMS Admin</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .filter-bar { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:20px; }
+    .filter-bar select, .filter-bar input { padding:8px 12px; border:1.5px solid #aab; border-radius:6px; font-size:.9rem; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+    th { background:#f5f5f5; padding:12px 16px; text-align:left; font-size:.85rem; font-weight:600; color:#555; border-bottom:1px solid #e0e0e0; }
+    td { padding:11px 16px; font-size:.9rem; border-bottom:1px solid #f0f0f0; vertical-align:top; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#fafafa; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:10px; font-size:.78rem; font-weight:600; }
+    .badge-Pending  { background:#fff3e0; color:#e65100; }
+    .badge-Accepted { background:#e8f5e9; color:#2e7d32; }
+    .badge-Rejected { background:#fce4ec; color:#c62828; }
+    .badge-Cancelled{ background:#f5f5f5; color:#777; }
+    .badge-Expired  { background:#f3e5f5; color:#6a1b9a; }
+    .msg-cell { max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#666; font-size:.85rem; }
+    .summary-strip { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+    .strip-card { background:#fff; border-radius:8px; padding:14px 20px; box-shadow:0 1px 6px rgba(0,0,0,.08); text-align:center; min-width:110px; }
+    .strip-card .sv { font-size:1.5rem; font-weight:700; }
+    .strip-card .sl { font-size:.8rem; color:#666; margin-top:2px; }
+    .no-data { text-align:center; padding:48px; color:#888; background:#fff; border-radius:8px; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="sb-page">
+  <h1>Mentorship Requests</h1>
+
+  <div id="summary-strip" class="summary-strip"></div>
+
+  <div class="filter-bar">
+    <div>
+      <label style="font-size:.85rem;font-weight:500;color:#555;margin-right:6px;">Status:</label>
+      <select id="status-filter" onchange="applyFilter()">
+        <option value="">All</option>
+        <option value="Pending">Pending</option>
+        <option value="Accepted">Accepted</option>
+        <option value="Rejected">Rejected</option>
+        <option value="Cancelled">Cancelled</option>
+        <option value="Expired">Expired</option>
+      </select>
+    </div>
+    <input type="text" id="search-box" placeholder="Search student or alumni name…" oninput="applyFilter()" style="width:260px;" />
+    <span id="count-label" style="color:#666; font-size:.88rem;"></span>
+  </div>
+
+  <div id="spinner" class="spinner"></div>
+  <div id="table-container" style="display:none;">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Student Name</th>
+          <th>Alumni Name</th>
+          <th>Request Date</th>
+          <th>Status</th>
+          <th>Message (preview)</th>
+        </tr>
+      </thead>
+      <tbody id="mentorship-body"></tbody>
+    </table>
+    <div class="pagination" id="pagination" style="margin-top:16px;"></div>
+  </div>
+  <div id="no-data" class="no-data" style="display:none;">No mentorship requests found.</div>
+  <div id="error-msg" style="display:none; color:#d32f2f; padding:24px;"></div>
+</div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Mentorship Requests');
+
+  let currentPage = 1;
+  const PAGE_SIZE = 20;
+  let allRows = [];
+
+  function applyFilter() {
+    currentPage = 1;
+    loadMentorship();
+  }
+
+  function loadMentorship() {
+    const status  = document.getElementById('status-filter').value;
+    const spinner = document.getElementById('spinner');
+    const tbl     = document.getElementById('table-container');
+    const noData  = document.getElementById('no-data');
+    const errMsg  = document.getElementById('error-msg');
+
+    spinner.style.display = 'block';
+    tbl.style.display     = 'none';
+    noData.style.display  = 'none';
+    errMsg.style.display  = 'none';
+
+    const params = new URLSearchParams({ page: currentPage, pageSize: PAGE_SIZE });
+    if (status) params.set('status', status);
+
+    apiFetch('/admin/mentorship?' + params.toString())
+      .then(res => {
+        spinner.style.display = 'none';
+        const d = res.data;
+        allRows = d.requests || [];
+
+        document.getElementById('count-label').textContent =
+          `Showing ${allRows.length} of ${d.total} requests`;
+
+        if (allRows.length === 0) {
+          noData.style.display = 'block';
+          return;
+        }
+
+        renderRows(allRows);
+        renderPagination(d.totalPages, d.page);
+        tbl.style.display = 'block';
+      })
+      .catch(err => {
+        spinner.style.display = 'none';
+        errMsg.textContent = 'Could not load mentorship data: ' + (err.message || 'Unknown error');
+        errMsg.style.display = 'block';
+      });
+  }
+
+  function renderRows(rows) {
+    const q = document.getElementById('search-box').value.toLowerCase();
+    const filtered = q
+      ? rows.filter(r =>
+          r.studentName.toLowerCase().includes(q) ||
+          r.alumniName.toLowerCase().includes(q))
+      : rows;
+
+    const tbody = document.getElementById('mentorship-body');
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No matching records.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filtered.map((r, i) => `
+      <tr>
+        <td>${(currentPage - 1) * PAGE_SIZE + i + 1}</td>
+        <td><strong>${esc(r.studentName)}</strong><br/><small style="color:#888">${esc(r.studentEmail)}</small></td>
+        <td><strong>${esc(r.alumniName)}</strong><br/><small style="color:#888">${esc(r.alumniEmail)}</small></td>
+        <td>${new Date(r.requestedAt).toLocaleDateString()}</td>
+        <td><span class="badge badge-${r.status}">${esc(r.status)}</span></td>
+        <td class="msg-cell" title="${esc(r.message)}">${esc(r.message)}</td>
+      </tr>`).join('');
+  }
+
+  function renderPagination(totalPages, page) {
+    const pag = document.getElementById('pagination');
+    if (totalPages <= 1) { pag.innerHTML = ''; return; }
+    let html = `<button onclick="goPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>← Prev</button>`;
+    for (let p = 1; p <= totalPages; p++) {
+      html += `<button onclick="goPage(${p})" class="${p === page ? 'active' : ''}">${p}</button>`;
+    }
+    html += `<button onclick="goPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Next →</button>`;
+    pag.innerHTML = html;
+  }
+
+  function goPage(p) { currentPage = p; loadMentorship(); }
+
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Load summary counts from the dashboard endpoint
+  function loadSummary() {
+    apiFetch('/dashboards/admin')
+      .then(res => {
+        const d = res.data || {};
+        document.getElementById('summary-strip').innerHTML = `
+          <div class="strip-card"><div class="sv" style="color:#e65100">${d.pendingMentorships ?? 0}</div><div class="sl">Pending</div></div>
+        `;
+      })
+      .catch(() => {});
+
+    // Also get full breakdown from reports endpoint
+    apiFetch('/admin/reports/mentorship')
+      .then(res => {
+        const d = res.data || {};
+        document.getElementById('summary-strip').innerHTML = `
+          <div class="strip-card"><div class="sv">${d.totalRequests ?? 0}</div><div class="sl">Total</div></div>
+          <div class="strip-card"><div class="sv" style="color:#e65100">${d.pending ?? 0}</div><div class="sl">Pending</div></div>
+          <div class="strip-card"><div class="sv" style="color:#2e7d32">${d.accepted ?? 0}</div><div class="sl">Accepted</div></div>
+          <div class="strip-card"><div class="sv" style="color:#c62828">${d.rejected ?? 0}</div><div class="sl">Rejected</div></div>
+          <div class="strip-card"><div class="sv" style="color:#777">${d.cancelled ?? 0}</div><div class="sl">Cancelled</div></div>
+        `;
+      })
+      .catch(() => {});
+  }
+
+  loadSummary();
+  loadMentorship();
+</script>
+</body>
+</html>

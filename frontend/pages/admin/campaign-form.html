@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campaign Form — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .form-card { background:#fff; border-radius:8px; padding:2rem; max-width:680px; margin:2rem auto; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .form-card h2 { margin:0 0 1.5rem; }
+    .form-group { margin-bottom:1.1rem; }
+    label { display:block; font-weight:600; margin-bottom:.35rem; font-size:.9rem; }
+    input, select, textarea { width:100%; padding:.5rem .75rem; border:1px solid #ccc; border-radius:4px; font-size:.95rem; box-sizing:border-box; }
+    textarea { resize:vertical; }
+    .err { color:#dc3545; font-size:.82rem; margin-top:.25rem; display:none; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .btn { padding:.55rem 1.25rem; border:none; border-radius:4px; cursor:pointer; font-size:.95rem; text-decoration:none; display:inline-block; }
+    .btn-primary   { background:#0d6efd; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .btn-row { display:flex; gap:.75rem; margin-top:1.5rem; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="form-card">
+  <h2 id="page-title">Create Campaign</h2>
+
+  <div class="form-group">
+    <label for="title">Title *</label>
+    <input type="text" id="title" maxlength="200" placeholder="Campaign title" />
+    <div class="err" id="err-title">Title is required.</div>
+  </div>
+
+  <div class="form-group">
+    <label for="description">Description *</label>
+    <textarea id="description" rows="4" maxlength="2000" placeholder="Describe the campaign purpose..."></textarea>
+    <div class="err" id="err-description">Description is required.</div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="targetAmount">Target Amount (Rs) *</label>
+      <input type="number" id="targetAmount" min="1" step="1" placeholder="e.g. 500000" />
+      <div class="err" id="err-target">Target amount must be greater than 0.</div>
+    </div>
+    <div class="form-group">
+      <label for="endDate">End Date *</label>
+      <input type="datetime-local" id="endDate" />
+      <div class="err" id="err-endDate">End date must be in the future.</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="submitForm()">Save Campaign</button>
+    <a href="/frontend/pages/admin/campaigns.html" class="btn btn-secondary">Cancel</a>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Campaign Form');
+
+  const urlParams  = new URLSearchParams(location.search);
+  const editId     = urlParams.get('id');
+  const isEditMode = !!editId;
+
+  if (isEditMode) {
+    document.getElementById('page-title').textContent = 'Edit Campaign';
+    loadCampaign();
+  }
+
+  async function loadCampaign() {
+    let res;
+    try { res = await apiFetch(`/campaigns/${editId}`); } catch(e) { showToast(e.message||'Failed to load.','error'); return; }
+    const c = res.data;
+    document.getElementById('title').value        = c.title;
+    document.getElementById('description').value  = c.description;
+    document.getElementById('targetAmount').value = c.targetAmount;
+    const d = new Date(c.endDate);
+    document.getElementById('endDate').value      = d.toISOString().slice(0,16);
+  }
+
+  function validate() {
+    let ok = true;
+    const show = (id, vis) => { document.getElementById(id).style.display = vis ? 'block' : 'none'; if(vis) ok=false; };
+    show('err-title',       !document.getElementById('title').value.trim());
+    show('err-description', !document.getElementById('description').value.trim());
+    const amt = parseFloat(document.getElementById('targetAmount').value);
+    show('err-target', isNaN(amt) || amt <= 0);
+    const ed = document.getElementById('endDate').value;
+    show('err-endDate', !ed || new Date(ed) <= new Date());
+    return ok;
+  }
+
+  async function submitForm() {
+    if (!validate()) return;
+    const body = {
+      title:        document.getElementById('title').value.trim(),
+      description:  document.getElementById('description').value.trim(),
+      targetAmount: parseFloat(document.getElementById('targetAmount').value),
+      endDate:      new Date(document.getElementById('endDate').value).toISOString(),
+      status:       isEditMode ? '' : 'Active',
+    };
+    const url    = isEditMode ? `/campaigns/${editId}` : '/campaigns';
+    const method = isEditMode ? 'PUT' : 'POST';
+    try {
+      const res = await apiFetch(url, { method, body: JSON.stringify(body) });
+      showToast(res.message || 'Saved!', 'success');
+      setTimeout(() => location.href = '/frontend/pages/admin/campaigns.html', 1200);
+    } catch(e) {
+      showToast(e.message || 'Failed to save.', 'error');
+    }
+  }
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = `toast ${type}`; t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 3500);
+  }
+</script>
+</div>
+</body>
+</html>

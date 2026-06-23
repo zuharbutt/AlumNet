@@ -1,0 +1,29 @@
+# Build outputs
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / JetBrains
+.idea/
+
+# VS Code
+.vscode/
+
+# Environment / secrets
+appsettings.Development.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if any frontend tooling added)
+node_modules/
+
+# Logs
+*.log

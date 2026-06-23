@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alumni Directory — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <h1>Alumni Directory</h1>
+
+  <div class="dir-layout">
+    <!-- Sidebar filters -->
+    <aside class="dir-sidebar">
+      <h3>Filters</h3>
+
+      <div class="form-group">
+        <label for="f-dept">Department</label>
+        <select id="f-dept">
+          <option value="">All Departments</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="f-year-from">Grad Year From</label>
+        <input type="number" id="f-year-from" min="1950" max="2026" placeholder="e.g. 2010" />
+      </div>
+
+      <div class="form-group">
+        <label for="f-year-to">Grad Year To</label>
+        <input type="number" id="f-year-to" min="1950" max="2026" placeholder="e.g. 2020" />
+      </div>
+
+      <div class="form-group">
+        <label for="f-industry">Industry</label>
+        <input type="text" id="f-industry" placeholder="e.g. Software" />
+      </div>
+
+      <div class="form-group">
+        <label for="f-location">Location</label>
+        <input type="text" id="f-location" placeholder="e.g. Karachi" />
+      </div>
+
+      <div class="form-group">
+        <label for="f-keyword">Keyword</label>
+        <input type="text" id="f-keyword" placeholder="Name or company…" />
+      </div>
+
+      <div class="dir-actions">
+        <button class="btn btn-primary" style="flex:1;padding:9px;" onclick="applyFilters()">Apply Filters</button>
+        <button class="btn btn-secondary" style="padding:9px 14px;" onclick="clearFilters()">Clear</button>
+      </div>
+    </aside>
+
+    <!-- Results -->
+    <main class="dir-main">
+      <div id="results-area">
+        <div class="spinner"></div>
+      </div>
+      <div id="pagination-area" class="pagination" style="margin-top:16px;"></div>
+      <div id="page-info" class="page-info"></div>
+    </main>
+  </div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script src="../../js/utils.js"></script>
+<script>
+  requireAuth(['Student', 'Admin']);
+  renderSidebar('Alumni Directory');
+
+  let currentPage = 1;
+  const pageSize  = 10;
+
+  // Load department dropdown
+  apiFetch('/departments').then(res => {
+    const select = document.getElementById('f-dept');
+    (res.data || []).forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.departmentId;
+      opt.textContent = d.name;
+      select.appendChild(opt);
+    });
+  });
+
+  function getFilters() {
+    return {
+      department: document.getElementById('f-dept').value     || null,
+      yearFrom:   document.getElementById('f-year-from').value || null,
+      yearTo:     document.getElementById('f-year-to').value   || null,
+      industry:   document.getElementById('f-industry').value.trim() || null,
+      location:   document.getElementById('f-location').value.trim() || null,
+      keyword:    document.getElementById('f-keyword').value.trim()  || null,
+    };
+  }
+
+  function applyFilters() { currentPage = 1; loadDirectory(); }
+
+  function clearFilters() {
+    document.getElementById('f-dept').value     = '';
+    document.getElementById('f-year-from').value = '';
+    document.getElementById('f-year-to').value   = '';
+    document.getElementById('f-industry').value  = '';
+    document.getElementById('f-location').value  = '';
+    document.getElementById('f-keyword').value   = '';
+    currentPage = 1;
+    loadDirectory();
+  }
+
+  async function loadDirectory() {
+    const area = document.getElementById('results-area');
+    area.innerHTML = '<div class="spinner"></div>';
+    document.getElementById('pagination-area').innerHTML = '';
+    document.getElementById('page-info').textContent = '';
+
+    const f = getFilters();
+    const params = new URLSearchParams({ page: currentPage, pageSize });
+    if (f.department) params.set('department', f.department);
+    if (f.yearFrom)   params.set('yearFrom', f.yearFrom);
+    if (f.yearTo)     params.set('yearTo', f.yearTo);
+    if (f.industry)   params.set('industry', f.industry);
+    if (f.location)   params.set('location', f.location);
+    if (f.keyword)    params.set('keyword', f.keyword);
+
+    try {
+      const res = await apiFetch(`/alumni?${params}`);
+      const d   = res.data;
+
+      if (!d || d.items.length === 0) {
+        area.innerHTML = '<div class="no-results">No alumni match your filters.</div>';
+        return;
+      }
+
+      area.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'alumni-grid';
+
+      d.items.forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'alumni-card';
+        card.innerHTML = `
+          <h3>${escHtml(a.fullName)}</h3>
+          <div class="card-meta">
+            <div>${escHtml(a.departmentName)} · Class of ${a.graduationYear}</div>
+            ${a.jobTitle    ? `<div>${escHtml(a.jobTitle)}${a.currentCompany ? ' at ' + escHtml(a.currentCompany) : ''}</div>` : ''}
+            ${a.industry    ? `<div>Industry: ${escHtml(a.industry)}</div>` : ''}
+            ${a.workLocation? `<div>📍 ${escHtml(a.workLocation)}</div>` : ''}
+          </div>
+          <div class="card-footer">
+            <a href="alumni-detail.html?id=${a.userId}" class="btn-sm btn-outline">View Profile</a>
+          </div>`;
+        grid.appendChild(card);
+      });
+      area.appendChild(grid);
+
+      renderPagination(d.totalCount, d.pageNumber, d.pageSize);
+    } catch (err) {
+      area.innerHTML = `<div class="no-results" style="color:#c62828;">${escHtml(err.message || 'Failed to load.')}</div>`;
+    }
+  }
+
+  function renderPagination(totalCount, pageNumber, pgSize) {
+    const totalPages = Math.ceil(totalCount / pgSize);
+    const pagArea    = document.getElementById('pagination-area');
+    const infoEl     = document.getElementById('page-info');
+    pagArea.innerHTML = '';
+
+    if (totalPages <= 1) {
+      infoEl.textContent = `${totalCount} alumni found`;
+      return;
+    }
+
+    const from = (pageNumber - 1) * pgSize + 1;
+    const to   = Math.min(pageNumber * pgSize, totalCount);
+    infoEl.textContent = `Showing ${from}–${to} of ${totalCount} alumni`;
+
+    const prev = document.createElement('button');
+    prev.textContent = '← Previous';
+    prev.disabled = pageNumber <= 1;
+    prev.onclick = () => { currentPage--; loadDirectory(); };
+    pagArea.appendChild(prev);
+
+    const maxVisible = 5;
+    let startPage = Math.max(1, pageNumber - 2);
+    let endPage   = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage < maxVisible - 1) startPage = Math.max(1, endPage - maxVisible + 1);
+
+    for (let p = startPage; p <= endPage; p++) {
+      const btn = document.createElement('button');
+      btn.textContent = p;
+      if (p === pageNumber) btn.classList.add('active');
+      btn.onclick = ((pg) => () => { currentPage = pg; loadDirectory(); })(p);
+      pagArea.appendChild(btn);
+    }
+
+    const next = document.createElement('button');
+    next.textContent = 'Next →';
+    next.disabled = pageNumber >= totalPages;
+    next.onclick = () => { currentPage++; loadDirectory(); };
+    pagArea.appendChild(next);
+  }
+
+  function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Allow Enter key in keyword field to trigger search
+  document.getElementById('f-keyword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); applyFilters(); }
+  });
+
+  loadDirectory();
+</script>
+</div>
+</body>
+</html>

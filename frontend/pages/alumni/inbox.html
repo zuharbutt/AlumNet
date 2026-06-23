@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mentorship Inbox — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .tab-bar { display:flex; gap:0; border-bottom:2px solid #e0e0e0; margin-bottom:24px; }
+    .tab-btn { padding:10px 22px; background:none; border:none; cursor:pointer; font-size:.95rem; color:#666; border-bottom:3px solid transparent; margin-bottom:-2px; transition:color .2s,border-color .2s; }
+    .tab-btn.active { color:#1565c0; border-bottom-color:#1565c0; font-weight:600; }
+    .tab-btn:hover:not(.active) { color:#333; }
+    .tab-badge { display:inline-block; background:#e53935; color:#fff; border-radius:10px; font-size:.72rem; font-weight:700; padding:1px 7px; margin-left:5px; vertical-align:middle; }
+
+    .request-card { background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:18px 20px; margin-bottom:14px; }
+    .request-card .rc-header { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; }
+    .request-card .student-name { font-weight:600; font-size:1rem; color:#333; }
+    .request-card .rc-meta { font-size:.82rem; color:#888; margin-top:2px; }
+    .request-card .rc-message { font-size:.9rem; color:#444; margin:10px 0; line-height:1.55; background:#f9f9f9; padding:10px 12px; border-radius:6px; border-left:3px solid #1565c0; }
+
+    .status-pill { display:inline-block; padding:3px 11px; border-radius:12px; font-size:.78rem; font-weight:600; }
+    .pill-pending  { background:#fff3e0; color:#e65100; }
+    .pill-accepted { background:#e8f5e9; color:#2e7d32; }
+    .pill-rejected { background:#fce4ec; color:#b71c1c; }
+    .pill-cancelled { background:#f5f5f5; color:#757575; }
+
+    .action-btns { display:flex; gap:8px; }
+    .btn-accept { background:#2e7d32; color:#fff; border:none; padding:6px 16px; border-radius:5px; font-size:.85rem; cursor:pointer; transition:background .2s; }
+    .btn-accept:hover { background:#1b5e20; }
+    .btn-reject { background:none; border:1px solid #e57373; color:#c62828; padding:6px 16px; border-radius:5px; font-size:.85rem; cursor:pointer; transition:background .2s; }
+    .btn-reject:hover { background:#ffebee; }
+
+    .pagination { display:flex; gap:8px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
+    .page-btn { padding:6px 13px; border:1px solid #ccc; background:#fff; cursor:pointer; border-radius:5px; font-size:.88rem; }
+    .page-btn.active { background:#1565c0; color:#fff; border-color:#1565c0; }
+    .page-btn:hover:not(.active) { background:#f5f5f5; }
+
+    /* Confirm dialog overlay */
+    .confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:1000; align-items:center; justify-content:center; }
+    .confirm-overlay.open { display:flex; }
+    .confirm-box { background:#fff; border-radius:10px; padding:28px; max-width:380px; width:100%; box-shadow:0 8px 32px rgba(0,0,0,.18); text-align:center; }
+    .confirm-box h3 { margin:0 0 10px; font-size:1.05rem; }
+    .confirm-box p  { font-size:.9rem; color:#555; margin-bottom:20px; }
+    .confirm-footer { display:flex; gap:10px; justify-content:center; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<!-- Confirm dialog -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <h3 id="confirm-title">Confirm Action</h3>
+    <p id="confirm-msg"></p>
+    <div class="confirm-footer">
+      <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-primary" id="confirm-ok-btn" onclick="runConfirmAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="sb-page">
+  <h1 style="font-size:1.5rem;margin-bottom:20px;">Mentorship Inbox</h1>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="Pending"  onclick="switchTab('Pending')">Pending <span class="tab-badge" id="pending-badge" style="display:none;"></span></button>
+    <button class="tab-btn"       data-tab="Accepted" onclick="switchTab('Accepted')">Accepted</button>
+    <button class="tab-btn"       data-tab="Rejected" onclick="switchTab('Rejected')">Rejected</button>
+  </div>
+
+  <div id="list-area"><div class="spinner"></div></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script src="../../js/utils.js"></script>
+<script>
+  requireAuth(['Alumni']);
+  renderSidebar('Mentorship Inbox');
+
+  let currentTab  = 'Pending';
+  let currentPage = 1;
+  const PAGE_SIZE = 10;
+
+  let pendingAction = null; // { requestId, status, cardEl }
+
+  loadRequests();
+  loadPendingCount();
+
+  function switchTab(tab) {
+    currentTab  = tab;
+    currentPage = 1;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    loadRequests();
+  }
+
+  async function loadPendingCount() {
+    try {
+      const res = await apiFetch('/mentorship/received?status=Pending&page=1&pageSize=1');
+      const cnt = res.data.totalCount;
+      const badge = document.getElementById('pending-badge');
+      if (cnt > 0) { badge.textContent = cnt; badge.style.display = 'inline-block'; }
+      else           badge.style.display = 'none';
+    } catch (_) {}
+  }
+
+  async function loadRequests() {
+    const area = document.getElementById('list-area');
+    area.innerHTML = '<div class="spinner"></div>';
+    document.getElementById('pagination').innerHTML = '';
+
+    try {
+      const res  = await apiFetch('/mentorship/received?status=' + currentTab + '&page=' + currentPage + '&pageSize=' + PAGE_SIZE);
+      const data = res.data;
+
+      if (!data.items || data.items.length === 0) {
+        area.innerHTML = '<div class="no-results">No ' + currentTab.toLowerCase() + ' requests.</div>';
+        return;
+      }
+
+      area.innerHTML = data.items.map(renderCard).join('');
+      renderPagination(data.totalCount);
+    } catch (err) {
+      area.innerHTML = '<div class="no-results" style="color:#c62828;">' + escHtml(err.message || 'Failed to load inbox.') + '</div>';
+    }
+  }
+
+  function renderCard(r) {
+    const date = new Date(r.requestedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+    const pillClass = { Pending:'pill-pending', Accepted:'pill-accepted', Rejected:'pill-rejected', Cancelled:'pill-cancelled' }[r.status] || 'pill-cancelled';
+
+    let actionHtml = '';
+    if (r.status === 'Pending') {
+      actionHtml =
+        '<div class="action-btns">' +
+          '<button class="btn-accept" onclick="confirmRespond(' + r.requestId + ', \'Accepted\', this)">Accept</button>' +
+          '<button class="btn-reject" onclick="confirmRespond(' + r.requestId + ', \'Rejected\', this)">Reject</button>' +
+        '</div>';
+    }
+
+    return '<div class="request-card" id="card-' + r.requestId + '">' +
+      '<div class="rc-header">' +
+        '<div>' +
+          '<div class="student-name">' + escHtml(r.studentName) + '</div>' +
+          '<div class="rc-meta">' + escHtml(r.studentEmail || '') + ' &bull; Received ' + date + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<span class="status-pill ' + pillClass + '">' + r.status + '</span>' +
+          actionHtml +
+        '</div>' +
+      '</div>' +
+      '<div class="rc-message">' + escHtml(r.message) + '</div>' +
+    '</div>';
+  }
+
+  function confirmRespond(requestId, status, triggerBtn) {
+    pendingAction = { requestId, status, triggerBtn };
+    const verb = status === 'Accepted' ? 'accept' : 'reject';
+    document.getElementById('confirm-title').textContent = (status === 'Accepted' ? 'Accept' : 'Reject') + ' Mentorship Request';
+    document.getElementById('confirm-msg').textContent   = 'Are you sure you want to ' + verb + ' this request? This cannot be undone.';
+    document.getElementById('confirm-ok-btn').style.background = status === 'Rejected' ? '#c62828' : '#1565c0';
+    document.getElementById('confirm-overlay').classList.add('open');
+  }
+
+  function closeConfirm() {
+    document.getElementById('confirm-overlay').classList.remove('open');
+    pendingAction = null;
+  }
+
+  async function runConfirmAction() {
+    if (!pendingAction) return;
+    const { requestId, status, triggerBtn } = pendingAction;
+    closeConfirm();
+
+    const card = document.getElementById('card-' + requestId);
+    const btns = card ? card.querySelectorAll('button') : [];
+    btns.forEach(b => b.disabled = true);
+
+    try {
+      await apiFetch('/mentorship/' + requestId + '/respond', {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      });
+
+      showToast('Request ' + status.toLowerCase() + ' successfully.', 'success');
+      loadRequests();
+      loadPendingCount();
+    } catch (err) {
+      showToast(err.message || 'Failed to respond.', 'error');
+      btns.forEach(b => b.disabled = false);
+    }
+  }
+
+  function renderPagination(total) {
+    const pages = Math.ceil(total / PAGE_SIZE);
+    if (pages <= 1) return;
+    const bar = document.getElementById('pagination');
+    let html = '';
+    for (let i = 1; i <= pages; i++) {
+      html += '<button class="page-btn' + (i === currentPage ? ' active' : '') + '" onclick="goPage(' + i + ')">' + i + '</button>';
+    }
+    bar.innerHTML = html;
+  }
+
+  function goPage(p) { currentPage = p; loadRequests(); }
+
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</div>
+</body>
+</html>

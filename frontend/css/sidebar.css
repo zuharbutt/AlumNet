@@ -1,0 +1,375 @@
+/* ============================================================
+   SaaS Sidebar Layout
+   ============================================================ */
+
+/* ── App Shell ──────────────────────────────────────────── */
+body.sidebar-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #f1f5f9;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+#sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: #0f172a;      /* Slate Navy */
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+  transition: width .25s;
+}
+
+#sidebar .sb-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+#sidebar .sb-brand .brand-dot {
+  width: 28px; height: 28px;
+  background: #6366f1;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+}
+
+/* ── Nav sections ───────────────────────────────────────── */
+#sidebar .sb-section-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: #475569;
+  padding: 20px 20px 6px;
+}
+
+#sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  color: #94a3b8;
+  font-size: .9rem;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+}
+
+#sidebar nav a:hover {
+  color: #e2e8f0;
+  background: rgba(255,255,255,.05);
+  text-decoration: none;
+}
+
+#sidebar nav a.active {
+  color: #fff;
+  background: rgba(99,102,241,.2);
+  border-left-color: #6366f1;   /* Indigo active */
+}
+
+#sidebar nav a .sb-icon {
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── User info at bottom of sidebar ────────────────────── */
+#sidebar .sb-user {
+  margin-top: auto;
+  border-top: 1px solid rgba(255,255,255,.07);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#sidebar .sb-user .avatar {
+  width: 34px; height: 34px;
+  background: #6366f1;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: .85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+#sidebar .sb-user .user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+#sidebar .sb-user .user-name {
+  font-size: .88rem;
+  color: #e2e8f0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#sidebar .sb-user .user-role {
+  font-size: .75rem;
+  color: #64748b;
+}
+
+#sidebar .sb-user .logout-btn {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  transition: background .15s, color .15s, border-color .15s;
+  white-space: nowrap;
+  letter-spacing: .02em;
+}
+#sidebar .sb-user .logout-btn:hover {
+  background: rgba(239, 68, 68, 0.28);
+  border-color: #f87171;
+  color: #fff;
+}
+
+/* ── Main content area ──────────────────────────────────── */
+#main-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top bar ────────────────────────────────────────────── */
+#topbar {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 28px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+#topbar .topbar-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+#topbar .topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: .88rem;
+  color: #475569;
+}
+
+#topbar .topbar-user .avatar {
+  width: 32px; height: 32px;
+  background: #6366f1;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── Page content ───────────────────────────────────────── */
+.sb-page {
+  padding: 28px;
+  flex: 1;
+  max-width: 1100px;
+}
+
+.sb-page h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.sb-page .page-subtitle {
+  font-size: .9rem;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+/* ── Stat cards ─────────────────────────────────────────── */
+.sb-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.sb-stat-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sb-stat-card .card-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.sb-stat-card .card-body { flex: 1; }
+
+.sb-stat-card .card-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.1;
+}
+
+.sb-stat-card .card-label {
+  font-size: .8rem;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.icon-indigo  { background: #eef2ff; color: #6366f1; }
+.icon-green   { background: #f0fdf4; color: #16a34a; }
+.icon-amber   { background: #fffbeb; color: #d97706; }
+.icon-rose    { background: #fff1f2; color: #e11d48; }
+.icon-blue    { background: #eff6ff; color: #2563eb; }
+.icon-purple  { background: #faf5ff; color: #9333ea; }
+.icon-teal    { background: #f0fdfa; color: #0d9488; }
+
+/* ── Card / panel ───────────────────────────────────────── */
+.sb-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  margin-bottom: 20px;
+}
+
+.sb-card h2, .sb-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 16px;
+}
+
+/* ── Tables inside cards ────────────────────────────────── */
+.sb-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sb-table th {
+  background: #f8fafc;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: .8rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sb-table td {
+  padding: 11px 14px;
+  font-size: .9rem;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.sb-table tr:last-child td { border-bottom: none; }
+.sb-table tr:hover td { background: #f8fafc; }
+
+/* ── Quick-link grid ────────────────────────────────────── */
+.sb-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.sb-quick-link {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 18px;
+  color: #1e293b;
+  font-size: .9rem;
+  font-weight: 500;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all .15s;
+}
+
+.sb-quick-link:hover {
+  border-color: #6366f1;
+  background: #eef2ff;
+  color: #4f46e5;
+  text-decoration: none;
+}
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn-indigo {
+  background: #6366f1;
+  color: #fff;
+  padding: 9px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: .9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .2s;
+}
+.btn-indigo:hover { background: #4f46e5; }
+
+/* ── Hamburger (mobile) ─────────────────────────────────── */
+#sidebar-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: #1e293b;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  #sidebar {
+    position: fixed;
+    left: -240px;
+    height: 100%;
+    transition: left .25s;
+  }
+  #sidebar.open { left: 0; box-shadow: 4px 0 20px rgba(0,0,0,.25); }
+  #sidebar-toggle { display: block; }
+  .sb-page { padding: 18px; }
+}

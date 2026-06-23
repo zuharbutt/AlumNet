@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Events — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; }
+    .filters { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .filters select, .filters input { padding:.4rem .7rem; border:1px solid #ccc; border-radius:4px; font-size:.9rem; }
+    .tab-bar { display:flex; gap:.5rem; margin-bottom:1rem; }
+    .tab-bar button { padding:.5rem 1.2rem; border:1px solid #ccc; background:#f5f5f5; border-radius:4px; cursor:pointer; }
+    .tab-bar button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    table { width:100%; border-collapse:collapse; background:#fff; }
+    th, td { padding:.65rem .9rem; border-bottom:1px solid #eee; font-size:.9rem; text-align:left; }
+    th { background:#f8f9fa; font-weight:600; }
+    .badge { padding:.2rem .55rem; border-radius:12px; font-size:.78rem; font-weight:600; }
+    .badge-scheduled { background:#d1e7dd; color:#0a3622; }
+    .badge-cancelled  { background:#f8d7da; color:#58151c; }
+    .badge-completed  { background:#cfe2ff; color:#052c65; }
+    .btn { padding:.35rem .8rem; border:none; border-radius:4px; cursor:pointer; font-size:.85rem; }
+    .btn-primary   { background:#0d6efd; color:#fff; }
+    .btn-warning   { background:#ffc107; color:#000; }
+    .btn-danger    { background:#dc3545; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .btn + .btn    { margin-left:.3rem; }
+    .pagination { display:flex; gap:.4rem; justify-content:center; margin-top:1rem; }
+    .pagination button { padding:.35rem .75rem; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
+    .pagination button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+    .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:999; align-items:center; justify-content:center; }
+    .overlay.show { display:flex; }
+    .dialog { background:#fff; border-radius:8px; padding:2rem; max-width:420px; width:90%; }
+    .dialog h3 { margin:0 0 1rem; }
+    .dialog-actions { display:flex; gap:.75rem; justify-content:flex-end; margin-top:1.5rem; }
+    #empty-row td { text-align:center; color:#888; padding:2rem; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <div class="page-header">
+    <h1>Manage Events</h1>
+    <a href="event-form.html" class="btn btn-primary">+ Create New Event</a>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="active" data-status="Scheduled" onclick="switchTab(this)">Upcoming</button>
+    <button data-status="Completed" onclick="switchTab(this)">Completed</button>
+    <button data-status="Cancelled" onclick="switchTab(this)">Cancelled</button>
+    <button data-status="" onclick="switchTab(this)">All</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <select id="filter-category" onchange="loadEvents()">
+      <option value="">All Categories</option>
+      <option>Reunion</option><option>Seminar</option><option>Workshop</option>
+      <option>Networking</option><option>Conference</option><option>Other</option>
+    </select>
+    <input type="date" id="filter-from" onchange="loadEvents()" placeholder="From date" />
+    <input type="date" id="filter-to" onchange="loadEvents()" placeholder="To date" />
+    <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+  </div>
+
+  <!-- Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th><th>Date</th><th>Category</th><th>Location</th>
+        <th>Capacity</th><th>Registered</th><th>Price (PKR)</th><th>Status</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="events-tbody">
+      <tr id="empty-row"><td colspan="9">Loading…</td></tr>
+    </tbody>
+  </table>
+
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Cancel Confirmation Dialog -->
+<div class="overlay" id="cancel-overlay">
+  <div class="dialog">
+    <h3>Cancel Event?</h3>
+    <p id="cancel-msg">This will cancel the event and refund all registered attendees. This cannot be undone.</p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" onclick="closeDialog()">No, go back</button>
+      <button class="btn btn-danger" id="confirm-cancel-btn">Yes, Cancel Event</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Manage Events');
+
+  let currentPage = 1;
+  let currentStatus = 'Scheduled';
+
+  function switchTab(btn) {
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentStatus = btn.dataset.status;
+    currentPage = 1;
+    loadEvents();
+  }
+
+  function clearFilters() {
+    document.getElementById('filter-category').value = '';
+    document.getElementById('filter-from').value = '';
+    document.getElementById('filter-to').value = '';
+    loadEvents();
+  }
+
+  async function loadEvents() {
+    const category = document.getElementById('filter-category').value;
+    const from     = document.getElementById('filter-from').value;
+    const to       = document.getElementById('filter-to').value;
+
+    let url = `/events?includeAll=true&page=${currentPage}&pageSize=10`;
+    if (currentStatus) url += `&status=${currentStatus}`;
+    if (category)      url += `&category=${encodeURIComponent(category)}`;
+    // Upcoming tab: only show events whose date is today or later
+    const effectiveFrom = (currentStatus === 'Scheduled' && !from)
+      ? new Date().toISOString().split('T')[0]
+      : from;
+    if (effectiveFrom) url += `&fromDate=${effectiveFrom}`;
+    if (to)            url += `&toDate=${to}`;
+
+    try {
+      const res = await apiFetch(url);
+      const { items, totalCount, page, pageSize } = res.data;
+      renderTable(items);
+      renderPagination(totalCount, page, pageSize);
+    } catch (e) {
+      showToast(e.message || 'Failed to load events.', 'error');
+    }
+  }
+
+  function renderTable(items) {
+    const tbody = document.getElementById('events-tbody');
+    if (!items || items.length === 0) {
+      tbody.innerHTML = '<tr id="empty-row"><td colspan="9">No events found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(ev => {
+      const date   = new Date(ev.eventDate).toLocaleDateString('en-PK', { dateStyle:'medium' });
+      const price  = ev.ticketPrice === 0 ? 'Free' : ev.ticketPrice.toLocaleString();
+      const badge  = `<span class="badge badge-${ev.status.toLowerCase()}">${ev.status}</span>`;
+      const canEdit   = ev.status !== 'Cancelled';
+      const canCancel = ev.status !== 'Cancelled';
+      return `<tr>
+        <td>${escHtml(ev.title)}</td>
+        <td>${date}</td>
+        <td>${escHtml(ev.category)}</td>
+        <td>${escHtml(ev.location)}</td>
+        <td>${ev.capacity}</td>
+        <td>${ev.registeredCount}</td>
+        <td>${price}</td>
+        <td>${badge}</td>
+        <td>
+          <div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center;">
+            ${canEdit   ? `<button class="btn btn-warning" onclick="editEvent(${ev.eventId})">Edit</button>` : ''}
+            ${canCancel ? `<button class="btn btn-danger"  onclick="promptCancel(${ev.eventId}, '${escHtml(ev.title).replace(/'/g,"\\'")}')">Cancel</button>` : ''}
+            <button class="btn btn-secondary" onclick="viewAttendees(${ev.eventId})">Attendees</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderPagination(total, page, pageSize) {
+    const pages = Math.ceil(total / pageSize);
+    const el = document.getElementById('pagination');
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = Array.from({ length: pages }, (_, i) =>
+      `<button class="${i + 1 === page ? 'active' : ''}" onclick="goPage(${i + 1})">${i + 1}</button>`
+    ).join('');
+  }
+
+  function goPage(p) { currentPage = p; loadEvents(); }
+  function editEvent(id) { location.href = `event-form.html?id=${id}`; }
+  function viewAttendees(id) { location.href = `attendees.html?id=${id}`; }
+
+  let cancelEventId = null;
+  function promptCancel(id, title) {
+    cancelEventId = id;
+    document.getElementById('cancel-msg').textContent =
+      `Cancel "${title}"? All registered attendees will be refunded. This cannot be undone.`;
+    document.getElementById('cancel-overlay').classList.add('show');
+  }
+  function closeDialog() {
+    document.getElementById('cancel-overlay').classList.remove('show');
+    cancelEventId = null;
+  }
+
+  document.getElementById('confirm-cancel-btn').addEventListener('click', async () => {
+    if (!cancelEventId) return;
+    try {
+      await apiFetch(`/events/${cancelEventId}/cancel`, { method: 'PUT' });
+      showToast('Event cancelled successfully.', 'success');
+      closeDialog();
+      loadEvents();
+    } catch (e) {
+      showToast(e.message || 'Failed to cancel event.', 'error');
+      closeDialog();
+    }
+  });
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type}`;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3500);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadEvents();
+</script>
+</div>
+</body>
+</html>

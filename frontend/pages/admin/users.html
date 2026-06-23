@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Users — AlumniMS Admin</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .tab-bar { display:flex; gap:8px; margin-bottom:20px; }
+    .tab-bar button { padding:8px 20px; border:1.5px solid #c5cae9; border-radius:6px; background:#fff; cursor:pointer; font-size:.9rem; font-weight:500; color:#1a237e; transition:all .2s; }
+    .tab-bar button.active { background:#1a237e; color:#fff; border-color:#1a237e; }
+    .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+    .toolbar input { padding:8px 12px; border:1.5px solid #aab; border-radius:6px; font-size:.9rem; width:260px; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+    th { background:#f5f5f5; padding:12px 16px; text-align:left; font-size:.85rem; font-weight:600; color:#555; border-bottom:1px solid #e0e0e0; }
+    td { padding:11px 16px; font-size:.9rem; border-bottom:1px solid #f0f0f0; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#fafafa; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:10px; font-size:.78rem; font-weight:600; }
+    .badge-active { background:#e8f5e9; color:#2e7d32; }
+    .badge-inactive { background:#fce4ec; color:#c62828; }
+    .no-data { text-align:center; padding:48px; color:#888; background:#fff; border-radius:8px; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="sb-page">
+  <h1>All Users</h1>
+
+  <div class="tab-bar">
+    <button class="active" id="tab-alumni" onclick="switchRole('Alumni')">Alumni</button>
+    <button id="tab-student" onclick="switchRole('Student')">Students</button>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="search-box" placeholder="Search by name or email…" oninput="filterTable()" />
+    <span id="count-label" style="color:#666; font-size:.88rem;"></span>
+  </div>
+
+  <div id="spinner" class="spinner"></div>
+  <div id="table-container" style="display:none;">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Full Name</th>
+          <th>Email</th>
+          <th>Department</th>
+          <th>Joined Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="users-body"></tbody>
+    </table>
+    <div class="pagination" id="pagination" style="margin-top:16px;"></div>
+  </div>
+  <div id="no-data" class="no-data" style="display:none;">No users found.</div>
+  <div id="error-msg" style="display:none; color:#d32f2f; padding:24px;"></div>
+</div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('All Users');
+
+  let currentRole = 'Alumni';
+  let currentPage = 1;
+  const PAGE_SIZE = 20;
+  let allRows = [];
+
+  function switchRole(role) {
+    currentRole = role;
+    currentPage = 1;
+    document.getElementById('tab-alumni').classList.toggle('active', role === 'Alumni');
+    document.getElementById('tab-student').classList.toggle('active', role === 'Student');
+    document.getElementById('search-box').value = '';
+    loadUsers();
+  }
+
+  function loadUsers() {
+    const spinner  = document.getElementById('spinner');
+    const tbl      = document.getElementById('table-container');
+    const noData   = document.getElementById('no-data');
+    const errMsg   = document.getElementById('error-msg');
+
+    spinner.style.display = 'block';
+    tbl.style.display     = 'none';
+    noData.style.display  = 'none';
+    errMsg.style.display  = 'none';
+
+    apiFetch(`/admin/users?role=${currentRole}&page=${currentPage}&pageSize=${PAGE_SIZE}`)
+      .then(res => {
+        spinner.style.display = 'none';
+        const d = res.data;
+        allRows = d.users || [];
+
+        document.getElementById('count-label').textContent =
+          `Showing ${allRows.length} of ${d.total} ${currentRole === 'Alumni' ? 'alumni' : 'students'}`;
+
+        if (allRows.length === 0) {
+          noData.style.display = 'block';
+          noData.textContent   = `No ${currentRole === 'Alumni' ? 'alumni' : 'students'} found.`;
+          return;
+        }
+
+        renderRows(allRows);
+        renderPagination(d.totalPages, d.page);
+        tbl.style.display = 'block';
+      })
+      .catch(err => {
+        spinner.style.display = 'none';
+        errMsg.textContent    = 'Could not load users: ' + (err.message || 'Unknown error');
+        errMsg.style.display  = 'block';
+      });
+  }
+
+  function renderRows(rows) {
+    const tbody = document.getElementById('users-body');
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#888; padding:32px;">No users found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map((u, i) => `
+      <tr>
+        <td>${(currentPage - 1) * PAGE_SIZE + i + 1}</td>
+        <td><strong>${esc(u.fullName)}</strong></td>
+        <td>${esc(u.email)}</td>
+        <td>${esc(u.department)}</td>
+        <td>${new Date(u.joinedAt).toLocaleDateString()}</td>
+        <td><span class="badge ${u.status === 'Active' ? 'badge-active' : 'badge-inactive'}">${esc(u.status)}</span></td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q = document.getElementById('search-box').value.toLowerCase();
+    const filtered = allRows.filter(u =>
+      u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+    );
+    renderRows(filtered);
+    document.getElementById('count-label').textContent =
+      filtered.length < allRows.length
+        ? `Showing ${filtered.length} of ${allRows.length} (filtered)`
+        : `Showing ${allRows.length} ${currentRole === 'Alumni' ? 'alumni' : 'students'}`;
+  }
+
+  function renderPagination(totalPages, page) {
+    const pag = document.getElementById('pagination');
+    if (totalPages <= 1) { pag.innerHTML = ''; return; }
+    let html = `<button onclick="goPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>← Prev</button>`;
+    for (let p = 1; p <= totalPages; p++) {
+      html += `<button onclick="goPage(${p})" class="${p === page ? 'active' : ''}">${p}</button>`;
+    }
+    html += `<button onclick="goPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Next →</button>`;
+    pag.innerHTML = html;
+  }
+
+  function goPage(p) { currentPage = p; loadUsers(); }
+
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  loadUsers();
+</script>
+</body>
+</html>

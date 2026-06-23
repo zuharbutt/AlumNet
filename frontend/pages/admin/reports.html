@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports — AlumniMS Admin</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .report-controls { background:#fff; border-radius:8px; padding:24px; box-shadow:0 1px 6px rgba(0,0,0,.08); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; }
+    .report-controls label { display:block; font-size:.85rem; font-weight:500; margin-bottom:4px; color:#555; }
+    .report-controls select, .report-controls input { padding:8px 10px; border:1.5px solid #aab; border-radius:6px; font-size:.9rem; }
+    .report-summary { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+    .summary-card { background:#fff; border-radius:8px; padding:20px 24px; box-shadow:0 1px 6px rgba(0,0,0,.08); flex:1; min-width:140px; text-align:center; }
+    .summary-card .val { font-size:1.8rem; font-weight:700; color:#1a73e8; }
+    .summary-card .lbl { font-size:.83rem; color:#666; margin-top:4px; }
+    .section-title { font-size:1rem; font-weight:600; color:#1a237e; margin:28px 0 12px; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+    th { background:#f5f5f5; padding:12px 16px; text-align:left; font-size:.85rem; font-weight:600; color:#555; border-bottom:1px solid #e0e0e0; }
+    td { padding:11px 16px; font-size:.9rem; border-bottom:1px solid #f0f0f0; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#fafafa; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:10px; font-size:.78rem; font-weight:600; }
+    .badge-Pending  { background:#fff3e0; color:#e65100; }
+    .badge-Accepted { background:#e8f5e9; color:#2e7d32; }
+    .badge-Rejected { background:#fce4ec; color:#c62828; }
+    .badge-Cancelled{ background:#f5f5f5; color:#777; }
+    .badge-Expired  { background:#f3e5f5; color:#6a1b9a; }
+    .no-data { text-align:center; padding:48px; color:#888; background:#fff; border-radius:8px; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="sb-page">
+  <h1>Reports &amp; Analytics</h1>
+
+  <div class="report-controls">
+    <div>
+      <label for="report-type">Report Type</label>
+      <select id="report-type" onchange="onTypeChange()">
+        <option value="mentorship">Mentorship Statistics</option>
+        <option value="events">Event Participation</option>
+        <option value="donations">Donation Summary</option>
+      </select>
+    </div>
+    <div id="date-filters" style="display:flex; gap:16px;">
+      <div>
+        <label for="from-date">From Date</label>
+        <input type="date" id="from-date" />
+      </div>
+      <div>
+        <label for="to-date">To Date</label>
+        <input type="date" id="to-date" />
+      </div>
+    </div>
+    <div id="campaign-filter" style="display:none;">
+      <label for="campaign-id">Campaign (optional)</label>
+      <select id="campaign-id" style="min-width:200px;">
+        <option value="">All Campaigns</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" style="width:auto; padding:10px 28px;" onclick="generateReport()">
+      Generate Report
+    </button>
+  </div>
+
+  <div id="spinner" class="spinner" style="display:none;"></div>
+  <div id="report-output"></div>
+</div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Reports & Analytics');
+
+  function onTypeChange() {
+    const type = document.getElementById('report-type').value;
+    document.getElementById('date-filters').style.display    = type === 'mentorship' ? 'flex' : 'none';
+    document.getElementById('campaign-filter').style.display = type === 'donations'  ? 'block': 'none';
+    if (type === 'donations') loadCampaignOptions();
+  }
+
+  async function loadCampaignOptions() {
+    const sel = document.getElementById('campaign-id');
+    if (sel.options.length > 1) return; // already loaded
+    try {
+      const res = await apiFetch('/campaigns?pageSize=100&page=1');
+      const items = res.data.items || [];
+      items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.campaignId;
+        opt.textContent = c.title;
+        sel.appendChild(opt);
+      });
+    } catch(e) { /* silent — user can still generate report for all campaigns */ }
+  }
+
+  function generateReport() {
+    const type    = document.getElementById('report-type').value;
+    const spinner = document.getElementById('spinner');
+    const output  = document.getElementById('report-output');
+
+    spinner.style.display = 'block';
+    output.innerHTML = '';
+
+    let url = '';
+    if (type === 'mentorship') {
+      const from = document.getElementById('from-date').value;
+      const to   = document.getElementById('to-date').value;
+      const params = [];
+      if (from) params.push(`fromDate=${from}`);
+      if (to)   params.push(`toDate=${to}`);
+      url = '/admin/reports/mentorship' + (params.length ? '?' + params.join('&') : '');
+    } else if (type === 'events') {
+      url = '/admin/reports/events';
+    } else {
+      const cid = document.getElementById('campaign-id').value;
+      url = '/admin/reports/donations' + (cid ? `?campaignId=${cid}` : '');
+    }
+
+    apiFetch(url)
+      .then(res => {
+        spinner.style.display = 'none';
+        if      (type === 'mentorship') renderMentorship(res.data);
+        else if (type === 'events')     renderEvents(res.data);
+        else                            renderDonations(res.data);
+      })
+      .catch(() => {
+        spinner.style.display = 'none';
+        output.innerHTML = `<p style="color:#d32f2f; padding:16px;">Error loading report. Please try again.</p>`;
+      });
+  }
+
+  function renderMentorship(d) {
+    // Summary cards
+    const summaryHtml = `
+      <div class="report-summary">
+        <div class="summary-card"><div class="val">${d.totalRequests}</div><div class="lbl">Total Requests</div></div>
+        <div class="summary-card"><div class="val" style="color:#f9a825">${d.pending}</div><div class="lbl">Pending</div></div>
+        <div class="summary-card"><div class="val" style="color:#2e7d32">${d.accepted}</div><div class="lbl">Accepted</div></div>
+        <div class="summary-card"><div class="val" style="color:#c62828">${d.rejected}</div><div class="lbl">Rejected</div></div>
+        <div class="summary-card"><div class="val" style="color:#666">${d.cancelled}</div><div class="lbl">Cancelled</div></div>
+      </div>`;
+
+    // Mentorship log table — fetch detailed records
+    const from = document.getElementById('from-date').value;
+    const to   = document.getElementById('to-date').value;
+    const params = new URLSearchParams({ page: 1, pageSize: 100 });
+    if (from) params.set('fromDate', from); // filter not on admin/mentorship but we pass all for now
+    // Wait — admin/mentorship takes status; for date range we just load all and note dates below
+
+    document.getElementById('report-output').innerHTML = summaryHtml +
+      `<div class="section-title">Mentorship Log</div>
+       <div id="log-spinner" class="spinner" style="padding:24px;"></div>
+       <div id="log-container"></div>`;
+
+    // Load the mentorship log
+    apiFetch('/admin/mentorship?pageSize=100&page=1')
+      .then(res => {
+        let rows = res.data.requests || [];
+
+        // Client-side date filter if dates were specified
+        if (from) rows = rows.filter(r => r.requestedAt >= from);
+        if (to)   rows = rows.filter(r => r.requestedAt.substring(0,10) <= to);
+
+        document.getElementById('log-spinner').style.display = 'none';
+
+        if (rows.length === 0) {
+          document.getElementById('log-container').innerHTML =
+            '<div class="no-data">No mentorship records in selected date range.</div>';
+          return;
+        }
+
+        const tableRows = rows.map((r, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${esc(r.studentName)}</td>
+            <td>${esc(r.alumniName)}</td>
+            <td>${new Date(r.requestedAt).toLocaleDateString()}</td>
+            <td><span class="badge badge-${r.status}">${esc(r.status)}</span></td>
+          </tr>`).join('');
+
+        document.getElementById('log-container').innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student Name</th>
+                <th>Alumni Name</th>
+                <th>Request Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>`;
+      })
+      .catch(() => {
+        document.getElementById('log-spinner').style.display = 'none';
+        document.getElementById('log-container').innerHTML =
+          '<p style="color:#d32f2f;">Could not load mentorship log.</p>';
+      });
+  }
+
+  function renderEvents(d) {
+    const output = document.getElementById('report-output');
+    if (!d.events || d.events.length === 0) {
+      output.innerHTML = '<div class="no-data">No events found.</div>';
+      return;
+    }
+    const rows = d.events.map(e => `
+      <tr>
+        <td>${esc(e.title)}</td>
+        <td>${new Date(e.eventDate).toLocaleDateString()}</td>
+        <td>${e.capacity}</td>
+        <td>${e.totalRegistered}</td>
+        <td>${e.totalAttended}</td>
+        <td>${e.totalCancelled}</td>
+        <td>${e.attendanceRate}%</td>
+      </tr>`).join('');
+    output.innerHTML = `
+      <div class="report-summary">
+        <div class="summary-card"><div class="val">${d.totalEvents}</div><div class="lbl">Total Events</div></div>
+        <div class="summary-card"><div class="val">${d.totalRegistrations}</div><div class="lbl">Total Registrations</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Title</th><th>Date</th><th>Capacity</th><th>Registered</th><th>Attended</th><th>Cancelled</th><th>Attendance Rate</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function renderDonations(d) {
+    const output = document.getElementById('report-output');
+    if (!d.campaigns || d.campaigns.length === 0) {
+      output.innerHTML = '<div class="no-data">No campaigns found.</div>';
+      return;
+    }
+    const rows = d.campaigns.map(c => `
+      <tr>
+        <td>${esc(c.title)}</td>
+        <td>Rs ${Number(c.targetAmount).toLocaleString()}</td>
+        <td>Rs ${Number(c.raisedAmount).toLocaleString()}</td>
+        <td>${c.donorCount}</td>
+        <td>Rs ${Number(c.averageDonation).toLocaleString()}</td>
+        <td>Rs ${Number(c.largestDonation).toLocaleString()}</td>
+      </tr>`).join('');
+    output.innerHTML = `
+      <div class="report-summary">
+        <div class="summary-card"><div class="val">${d.totalCampaigns}</div><div class="lbl">Campaigns</div></div>
+        <div class="summary-card"><div class="val">Rs ${Number(d.totalRaised).toLocaleString()}</div><div class="lbl">Total Raised</div></div>
+        <div class="summary-card"><div class="val">${d.totalDonors}</div><div class="lbl">Total Donors</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Campaign</th><th>Target</th><th>Raised</th><th>Donors</th><th>Avg Donation</th><th>Largest</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Auto-generate mentorship report on load
+  generateReport();
+</script>
+</body>
+</html>

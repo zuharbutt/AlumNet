@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alumni Dashboard — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+  <div class="sb-page">
+    <h1 id="welcome-h">Welcome</h1>
+    <p class="page-subtitle">Here's what's happening with your mentorship and activity.</p>
+
+    <div id="spinner" class="spinner"></div>
+
+    <div id="stats" style="display:none;">
+      <div class="sb-stat-grid">
+        <div class="sb-stat-card" id="requests-card">
+          <div class="card-icon icon-amber">📥</div>
+          <div class="card-body">
+            <div class="card-value" id="incoming-count">—</div>
+            <div class="card-label">Incoming Requests</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-indigo">👥</div>
+          <div class="card-body">
+            <div class="card-value" id="mentees-count">—</div>
+            <div class="card-label">Active Mentees</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-green">💰</div>
+          <div class="card-body">
+            <div class="card-value" id="total-donated">—</div>
+            <div class="card-label">Total Donated (PKR)</div>
+          </div>
+        </div>
+        <div class="sb-stat-card">
+          <div class="card-icon icon-blue">📅</div>
+          <div class="card-body">
+            <div class="card-value" id="events-count">—</div>
+            <div class="card-label">Upcoming Events</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-card">
+        <h3>Quick Links</h3>
+        <div class="sb-quick-grid">
+          <a href="inbox.html" class="sb-quick-link"><span>📥</span> Mentorship Inbox</a>
+          <a href="../shared/events.html" class="sb-quick-link"><span>📅</span> Browse Events</a>
+          <a href="../shared/donations.html" class="sb-quick-link"><span>💳</span> View Campaigns</a>
+          <a href="profile.html" class="sb-quick-link"><span>👤</span> Edit Profile</a>
+          <a href="my-donations.html" class="sb-quick-link"><span>💰</span> My Donations</a>
+        </div>
+      </div>
+    </div>
+
+    <div id="error-msg" style="display:none; color:#d32f2f; padding:16px; background:#fff; border-radius:8px;"></div>
+  </div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni']);
+  renderSidebar('My Dashboard');
+
+  const user = getUser();
+  document.getElementById('welcome-h').textContent = `Welcome, ${user?.fullName ?? 'Alumni'}`;
+
+  apiFetch('/dashboards/alumni')
+    .then(res => {
+      const d = res.data || {};
+      const incoming = d.incomingRequestsCount ?? 0;
+
+      document.getElementById('incoming-count').textContent = incoming;
+      document.getElementById('mentees-count').textContent  = d.acceptedMenteeCount ?? 0;
+      document.getElementById('total-donated').textContent  =
+        d.totalDonated != null ? Number(d.totalDonated).toLocaleString() : '0';
+      document.getElementById('events-count').textContent   = d.upcomingEventsCount ?? 0;
+
+      if (incoming > 0) {
+        document.getElementById('requests-card').style.borderLeft = '3px solid #d97706';
+      }
+
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('stats').style.display   = 'block';
+    })
+    .catch(() => {
+      document.getElementById('spinner').style.display = 'none';
+      const el = document.getElementById('error-msg');
+      el.textContent = 'Could not load dashboard data. Please refresh.';
+      el.style.display = 'block';
+    });
+</script>
+</body>
+</html>

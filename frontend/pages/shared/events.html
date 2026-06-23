@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Events — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .page-header { margin-bottom:1.5rem; }
+    .filters { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .filters select { padding:.4rem .7rem; border:1px solid #ccc; border-radius:4px; font-size:.9rem; }
+    .tab-bar { display:flex; gap:.5rem; margin-bottom:1.25rem; }
+    .tab-bar button { padding:.5rem 1.2rem; border:1px solid #ccc; background:#f5f5f5; border-radius:4px; cursor:pointer; }
+    .tab-bar button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1.25rem; }
+    .event-card { background:#fff; border-radius:8px; padding:1.25rem; box-shadow:0 2px 6px rgba(0,0,0,.07); display:flex; flex-direction:column; }
+    .event-card h3 { margin:0 0 .5rem; font-size:1.05rem; }
+    .event-card .meta { font-size:.85rem; color:#555; margin-bottom:.75rem; line-height:1.7; }
+    .event-card .badge { display:inline-block; padding:.2rem .55rem; border-radius:12px; font-size:.78rem; font-weight:600; margin-bottom:.5rem; }
+    .badge-free { background:#d1e7dd; color:#0a3622; }
+    .badge-paid { background:#cfe2ff; color:#052c65; }
+    .badge-full { background:#f8d7da; color:#58151c; }
+    .badge-registered { background:#d1e7dd; color:#0a3622; }
+    .event-card .spacer { flex:1; }
+    .event-card a.btn { display:block; text-align:center; padding:.5rem; background:#0d6efd; color:#fff; border-radius:4px; text-decoration:none; font-size:.9rem; margin-top:.75rem; }
+    .event-card a.btn.disabled { background:#adb5bd; pointer-events:none; }
+    .pagination { display:flex; gap:.4rem; justify-content:center; margin-top:1.5rem; }
+    .pagination button { padding:.35rem .75rem; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
+    .pagination button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    #empty { text-align:center; color:#888; padding:3rem; display:none; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <div class="page-header">
+    <h1>Events</h1>
+  </div>
+
+  <div class="tab-bar">
+    <button class="active" data-mode="upcoming" onclick="switchTab(this)">Upcoming</button>
+    <button data-mode="past" onclick="switchTab(this)">Past</button>
+  </div>
+
+  <div class="filters">
+    <select id="filter-category" onchange="loadEvents()">
+      <option value="">All Categories</option>
+      <option>Reunion</option><option>Seminar</option><option>Workshop</option>
+      <option>Networking</option><option>Conference</option><option>Other</option>
+    </select>
+  </div>
+
+  <div class="cards" id="cards"></div>
+  <div id="empty">No events found.</div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni','Student','Admin']);
+  renderSidebar('Events');
+
+  let currentMode = 'upcoming';
+  let currentPage = 1;
+
+  function switchTab(btn) {
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode = btn.dataset.mode;
+    currentPage = 1;
+    loadEvents();
+  }
+
+  async function loadEvents() {
+    const category = document.getElementById('filter-category').value;
+    // Fetch all events (large pageSize) so we can filter client-side by date
+    let url = `/events?includeAll=true&page=1&pageSize=200`;
+    if (category) url += `&category=${encodeURIComponent(category)}`;
+
+    try {
+      const res = await apiFetch(url);
+      const now = new Date();
+      let items = res.data.items || [];
+
+      // Split by actual event date/time vs current moment
+      if (currentMode === 'upcoming') {
+        items = items.filter(ev => new Date(ev.eventDate) > now);
+      } else {
+        items = items.filter(ev => new Date(ev.eventDate) <= now);
+        // Show most-recently-past first
+        items.sort((a, b) => new Date(b.eventDate) - new Date(a.eventDate));
+      }
+
+      // Client-side pagination
+      const pageSize = 12;
+      const totalCount = items.length;
+      const start = (currentPage - 1) * pageSize;
+      const pageItems = items.slice(start, start + pageSize);
+
+      renderCards(pageItems);
+      renderPagination(totalCount, currentPage, pageSize);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function renderCards(items) {
+    const container = document.getElementById('cards');
+    const empty     = document.getElementById('empty');
+    if (!items || !items.length) {
+      container.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    container.innerHTML = items.map(ev => {
+      const date    = new Date(ev.eventDate).toLocaleDateString('en-PK',{dateStyle:'long'});
+      const time    = new Date(ev.eventDate).toLocaleTimeString('en-PK',{timeStyle:'short'});
+      const isFree  = ev.ticketPrice === 0;
+      const price   = isFree ? 'Free' : `PKR ${ev.ticketPrice.toLocaleString()}`;
+
+      let badgeHtml = '';
+      let btnHtml   = '';
+      if (ev.isRegistered) {
+        badgeHtml = '<span class="badge badge-registered">✓ Registered</span>';
+        btnHtml   = `<a class="btn" href="event-detail.html?id=${ev.eventId}">View Details</a>`;
+      } else if (ev.isFull) {
+        badgeHtml = '<span class="badge badge-full">Full</span>';
+        btnHtml   = `<a class="btn disabled" href="#">Full</a>`;
+      } else {
+        badgeHtml = `<span class="badge ${isFree ? 'badge-free' : 'badge-paid'}">${price}</span>`;
+        btnHtml   = `<a class="btn" href="event-detail.html?id=${ev.eventId}">View & Register</a>`;
+      }
+
+      return `<div class="event-card">
+        ${badgeHtml}
+        <h3>${escHtml(ev.title)}</h3>
+        <div class="meta">
+          <span>📅 ${date} at ${time}</span><br>
+          <span>📍 ${escHtml(ev.location)}</span><br>
+          <span>🏷️ ${escHtml(ev.category)}</span><br>
+          <span>👥 ${ev.seatsRemaining} seats remaining of ${ev.capacity}</span>
+        </div>
+        <div class="spacer"></div>
+        ${btnHtml}
+      </div>`;
+    }).join('');
+  }
+
+  function renderPagination(total, page, pageSize) {
+    const pages = Math.ceil(total / pageSize);
+    const el = document.getElementById('pagination');
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = Array.from({ length: pages }, (_, i) =>
+      `<button class="${i+1===page?'active':''}" onclick="goPage(${i+1})">${i+1}</button>`
+    ).join('');
+  }
+
+  function goPage(p) { currentPage = p; loadEvents(); }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadEvents();
+</script>
+</div>
+</body>
+</html>

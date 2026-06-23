@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Campaigns — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:.75rem; }
+    .tab-bar { display:flex; gap:.5rem; margin-bottom:1.25rem; }
+    .tab-bar button { padding:.5rem 1.2rem; border:1px solid #ccc; background:#f5f5f5; border-radius:4px; cursor:pointer; }
+    .tab-bar button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    .filters { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .filters input { padding:.4rem .7rem; border:1px solid #ccc; border-radius:4px; font-size:.9rem; min-width:220px; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.07); }
+    th, td { padding:.75rem 1rem; text-align:left; border-bottom:1px solid #eee; font-size:.9rem; }
+    th { background:#f8f9fa; font-weight:600; color:#444; }
+    .badge { display:inline-block; padding:.2rem .55rem; border-radius:12px; font-size:.78rem; font-weight:600; }
+    .badge-active    { background:#d1e7dd; color:#0a3622; }
+    .badge-closed    { background:#e2e3e5; color:#41464b; }
+    .badge-cancelled { background:#f8d7da; color:#58151c; }
+    .btn { padding:.35rem .8rem; border:none; border-radius:4px; cursor:pointer; font-size:.85rem; text-decoration:none; display:inline-block; }
+    .btn-primary  { background:#0d6efd; color:#fff; }
+    .btn-warning  { background:#ffc107; color:#000; }
+    .btn-danger   { background:#dc3545; color:#fff; }
+    .btn-sm       { padding:.25rem .6rem; font-size:.8rem; }
+    .progress-wrap { min-width:120px; }
+    .progress { height:8px; background:#e9ecef; border-radius:4px; }
+    .progress-bar { height:100%; background:#198754; border-radius:4px; }
+    .pagination { display:flex; gap:.4rem; justify-content:center; margin-top:1.5rem; }
+    .pagination button { padding:.35rem .75rem; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
+    .pagination button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    #empty { text-align:center; color:#888; padding:3rem; display:none; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="sb-page">
+  <div class="page-header">
+    <h1>Donation Campaigns</h1>
+    <a href="/frontend/pages/admin/campaign-form.html" class="btn btn-primary">+ Create Campaign</a>
+  </div>
+
+  <div class="tab-bar">
+    <button class="active" data-status="Active"    onclick="switchTab(this)">Active</button>
+    <button data-status="Closed"    onclick="switchTab(this)">Closed</button>
+    <button data-status="Cancelled" onclick="switchTab(this)">Cancelled</button>
+    <button data-status=""          onclick="switchTab(this)">All</button>
+  </div>
+
+  <div class="filters">
+    <input type="text" id="search" placeholder="Search by title..." oninput="loadCampaigns()" />
+  </div>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>#</th><th>Title</th><th>Target</th><th>Raised</th>
+        <th>Progress</th><th>End Date</th><th>Status</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="empty">No campaigns found.</div>
+  <div class="pagination" id="pagination"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Admin']);
+  renderSidebar('Manage Campaigns');
+
+  let currentStatus = 'Active';
+  let currentPage   = 1;
+
+  function switchTab(btn) {
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentStatus = btn.dataset.status;
+    currentPage   = 1;
+    loadCampaigns();
+  }
+
+  async function loadCampaigns() {
+    const search = document.getElementById('search').value.toLowerCase();
+    const params = new URLSearchParams({ page: currentPage, pageSize: 15 });
+    if (currentStatus) params.set('status', currentStatus);
+
+    let res;
+    try { res = await apiFetch(`/campaigns?${params}`); } catch(e) { showToast(e.message||'Failed to load.','error'); return; }
+
+    let items = res.data.items;
+    if (search) items = items.filter(c => c.title.toLowerCase().includes(search));
+
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    document.getElementById('empty').style.display = items.length ? 'none' : 'block';
+    document.getElementById('table').style.display  = items.length ? 'table' : 'none';
+
+    items.forEach((c, i) => {
+      const pct     = Math.min(c.progressPercent, 100).toFixed(1);
+      const badgeCls = { Active:'badge-active', Closed:'badge-closed', Cancelled:'badge-cancelled' }[c.status] || '';
+      const endDate  = new Date(c.endDate).toLocaleDateString();
+      const canEdit  = c.status === 'Active';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${(currentPage-1)*15+i+1}</td>
+        <td><strong>${esc(c.title)}</strong></td>
+        <td>Rs ${c.targetAmount.toLocaleString()}</td>
+        <td>Rs ${c.raisedAmount.toLocaleString()}</td>
+        <td class="progress-wrap">
+          <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
+          <small>${pct}%</small>
+        </td>
+        <td>${endDate}</td>
+        <td><span class="badge ${badgeCls}">${c.status}</span></td>
+        <td>
+          ${canEdit ? `<a href="/frontend/pages/admin/campaign-form.html?id=${c.campaignId}" class="btn btn-warning btn-sm">Edit</a> ` : ''}
+          ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="closeCampaign(${c.campaignId})">Close</button>` : ''}
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    renderPagination(res.data.totalCount, 15);
+  }
+
+  async function closeCampaign(id) {
+    if (!confirm('Close this campaign? It will stop accepting donations.')) return;
+    try {
+      const res = await apiFetch(`/campaigns/${id}/close`, { method:'PUT' });
+      showToast(res.message || 'Campaign closed.', 'success');
+      loadCampaigns();
+    } catch(e) { showToast(e.message||'Failed to close.','error'); }
+  }
+
+  function renderPagination(total, pageSize) {
+    const pages = Math.ceil(total / pageSize);
+    const el = document.getElementById('pagination');
+    el.innerHTML = '';
+    for (let i = 1; i <= pages; i++) {
+      const btn = document.createElement('button');
+      btn.textContent = i;
+      if (i === currentPage) btn.classList.add('active');
+      btn.onclick = () => { currentPage = i; loadCampaigns(); };
+      el.appendChild(btn);
+    }
+  }
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = `toast ${type}`; t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 3000);
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  loadCampaigns();
+</script>
+</div>
+</body>
+</html>

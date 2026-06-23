@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Donations — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:.75rem; }
+    .summary-card { background:#fff; border-radius:8px; padding:1.5rem; box-shadow:0 2px 6px rgba(0,0,0,.07); margin-bottom:1.5rem; display:flex; gap:2rem; flex-wrap:wrap; align-items:center; }
+    .summary-item { text-align:center; }
+    .summary-item .label { font-size:.82rem; color:#888; margin-bottom:.3rem; }
+    .summary-item .value { font-size:1.7rem; font-weight:700; color:#0d6efd; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.07); }
+    th, td { padding:.75rem 1rem; text-align:left; border-bottom:1px solid #eee; font-size:.9rem; }
+    th { background:#f8f9fa; font-weight:600; color:#444; }
+    .badge-anon { background:#e2e3e5; color:#41464b; font-size:.75rem; padding:.15rem .45rem; border-radius:10px; }
+    .badge-completed { background:#d1e7dd; color:#0a3622; font-size:.78rem; padding:.2rem .5rem; border-radius:12px; }
+    .pagination { display:flex; gap:.4rem; justify-content:center; margin-top:1.5rem; }
+    .pagination button { padding:.35rem .75rem; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
+    .pagination button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    #empty { text-align:center; color:#888; padding:3rem; display:none; }
+    #empty a { color:#0d6efd; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="sb-page">
+  <div class="page-header">
+    <h1>My Donations</h1>
+    <a href="/frontend/pages/shared/donations.html" style="background:#0d6efd;color:#fff;padding:.45rem 1rem;border-radius:4px;text-decoration:none;font-size:.9rem;">+ Donate Now</a>
+  </div>
+
+  <div class="summary-card" id="summary-card" style="display:none">
+    <div class="summary-item">
+      <div class="label">Total Donated</div>
+      <div class="value" id="stat-total">Rs 0</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Donations Made</div>
+      <div class="value" id="stat-count">0</div>
+    </div>
+  </div>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>#</th><th>Campaign</th><th>Amount (Rs)</th>
+        <th>Date</th><th>Anonymous</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="empty">
+    No donations yet. <a href="/frontend/pages/shared/donations.html">Browse active campaigns</a> to make your first donation.
+  </div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni']);
+  renderSidebar('My Donations');
+
+  let currentPage = 1;
+  const PAGE_SIZE = 15;
+
+  async function loadDonations() {
+    const params = new URLSearchParams({ page: currentPage, pageSize: PAGE_SIZE });
+    let res;
+    try { res = await apiFetch(`/donations/mine?${params}`); } catch(e) { return; }
+
+    const { items, totalCount, totalAmount } = res.data;
+
+    if (totalCount > 0) {
+      document.getElementById('summary-card').style.display = 'flex';
+      document.getElementById('stat-total').textContent  = 'Rs ' + totalAmount.toLocaleString();
+      document.getElementById('stat-count').textContent  = totalCount.toLocaleString();
+    }
+
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    document.getElementById('empty').style.display = items.length ? 'none' : 'block';
+    document.getElementById('table').style.display  = items.length ? 'table' : 'none';
+
+    items.forEach((d, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${(currentPage-1)*PAGE_SIZE+i+1}</td>
+        <td>${esc(d.campaignTitle)}</td>
+        <td>${d.amount.toLocaleString()}</td>
+        <td>${new Date(d.donatedAt).toLocaleString()}</td>
+        <td>${d.isAnonymous ? 'Yes <span class="badge-anon">hidden</span>' : 'No'}</td>
+        <td><span class="badge-completed">${d.status}</span></td>`;
+      tbody.appendChild(tr);
+    });
+
+    renderPagination(totalCount);
+  }
+
+  function renderPagination(total) {
+    const pages = Math.ceil(total / PAGE_SIZE);
+    const el = document.getElementById('pagination');
+    el.innerHTML = '';
+    for (let i = 1; i <= pages; i++) {
+      const btn = document.createElement('button');
+      btn.textContent = i;
+      if (i === currentPage) btn.classList.add('active');
+      btn.onclick = () => { currentPage = i; loadDonations(); };
+      el.appendChild(btn);
+    }
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  loadDonations();
+</script>
+</div>
+</body>
+</html>

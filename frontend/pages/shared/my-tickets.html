@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Tickets — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .tab-bar { display:flex; gap:.5rem; margin-bottom:1.25rem; }
+    .tab-bar button { padding:.5rem 1.2rem; border:1px solid #ccc; background:#f5f5f5; border-radius:4px; cursor:pointer; }
+    .tab-bar button.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    .ticket-list { display:flex; flex-direction:column; gap:1rem; }
+    .ticket-card { background:#fff; border-radius:8px; padding:1.25rem; box-shadow:0 2px 6px rgba(0,0,0,.07); display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
+    .ticket-card.cancelled { opacity:.65; }
+    .tc-left h3 { margin:0 0 .35rem; font-size:1rem; }
+    .tc-left .meta { font-size:.85rem; color:#555; line-height:1.7; }
+    .tc-right { text-align:right; flex-shrink:0; }
+    .ticket-code { font-size:.88rem; font-family:monospace; background:#f0f0f0; padding:.2rem .5rem; border-radius:4px; display:inline-block; margin-bottom:.5rem; }
+    .badge { display:inline-block; padding:.2rem .55rem; border-radius:12px; font-size:.78rem; font-weight:600; margin-bottom:.5rem; }
+    .badge-paid      { background:#d1e7dd; color:#0a3622; }
+    .badge-refunded  { background:#fff3cd; color:#664d03; }
+    .badge-pending   { background:#cfe2ff; color:#052c65; }
+    .badge-cancelled { background:#f8d7da; color:#58151c; }
+    .btn { padding:.4rem .9rem; border:none; border-radius:4px; cursor:pointer; font-size:.85rem; }
+    .btn-danger    { background:#dc3545; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:999; align-items:center; justify-content:center; }
+    .overlay.show { display:flex; }
+    .dialog { background:#fff; border-radius:8px; padding:2rem; max-width:400px; width:90%; }
+    .dialog h3 { margin:0 0 1rem; }
+    .dialog-actions { display:flex; gap:.75rem; justify-content:flex-end; margin-top:1.5rem; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+    #empty { text-align:center; color:#888; padding:3rem; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <h1 style="margin-bottom:1.25rem;">My Tickets</h1>
+
+  <div class="tab-bar">
+    <button class="active" data-mode="upcoming" onclick="switchTab(this)">Upcoming</button>
+    <button data-mode="past"      onclick="switchTab(this)">Past</button>
+    <button data-mode="cancelled" onclick="switchTab(this)">Cancelled</button>
+  </div>
+
+  <div class="ticket-list" id="ticket-list"></div>
+  <div id="empty" style="display:none;">No tickets found.</div>
+</div>
+
+<!-- Cancel Confirmation -->
+<div class="overlay" id="cancel-overlay">
+  <div class="dialog">
+    <h3>Cancel Registration?</h3>
+    <p>Your ticket will be refunded in full. This event will be removed from your upcoming list.</p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" onclick="closeDialog()">Go Back</button>
+      <button class="btn btn-danger" id="confirm-cancel-btn">Yes, Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni','Student','Admin']);
+  renderSidebar('My Tickets');
+
+  let allTickets   = [];
+  let currentMode  = 'upcoming';
+  let cancelTicketId = null;
+
+  function switchTab(btn) {
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode = btn.dataset.mode;
+    renderTickets();
+  }
+
+  async function loadTickets() {
+    try {
+      const res  = await apiFetch('/tickets/mine');
+      allTickets = res.data || [];
+      renderTickets();
+    } catch (e) {
+      showToast(e.message || 'Failed to load tickets.', 'error');
+    }
+  }
+
+  function renderTickets() {
+    const now  = new Date();
+    const list = document.getElementById('ticket-list');
+    const empty = document.getElementById('empty');
+
+    let items;
+    if (currentMode === 'upcoming') {
+      items = allTickets.filter(t => t.cancelledAt == null && new Date(t.eventDate) > now && t.eventStatus === 'Scheduled');
+    } else if (currentMode === 'past') {
+      items = allTickets.filter(t => t.cancelledAt == null && (new Date(t.eventDate) <= now || t.eventStatus !== 'Scheduled'));
+    } else {
+      items = allTickets.filter(t => t.cancelledAt != null);
+    }
+
+    if (!items.length) {
+      list.innerHTML  = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    list.innerHTML = items.map(t => {
+      const date      = new Date(t.eventDate).toLocaleDateString('en-PK',{dateStyle:'medium'});
+      const time      = new Date(t.eventDate).toLocaleTimeString('en-PK',{timeStyle:'short'});
+      const price     = t.price === 0 ? 'Free' : `PKR ${t.price.toLocaleString()}`;
+      const isCancelled = t.cancelledAt != null;
+
+      let statusBadge;
+      if (isCancelled)                       statusBadge = '<span class="badge badge-cancelled">Cancelled</span>';
+      else if (t.paymentStatus === 'Refunded') statusBadge = '<span class="badge badge-refunded">Refunded</span>';
+      else if (t.paymentStatus === 'Paid')     statusBadge = '<span class="badge badge-paid">Paid</span>';
+      else                                    statusBadge = '<span class="badge badge-pending">Pending</span>';
+
+      const canCancel = !isCancelled
+        && new Date(t.eventDate) > new Date(Date.now() + 24 * 60 * 60 * 1000)
+        && t.eventStatus === 'Scheduled';
+
+      return `<div class="ticket-card ${isCancelled ? 'cancelled' : ''}">
+        <div class="tc-left">
+          <h3>${escHtml(t.eventTitle)}</h3>
+          <div class="meta">
+            📅 ${date} at ${time}<br>
+            📍 ${escHtml(t.eventLocation)}<br>
+            🏷️ ${escHtml(t.eventCategory)}
+          </div>
+        </div>
+        <div class="tc-right">
+          <div class="ticket-code">${escHtml(t.ticketCode)}</div><br>
+          ${statusBadge}<br>
+          <div style="font-size:.85rem;margin:.35rem 0;">${price}</div>
+          ${canCancel
+            ? `<button class="btn btn-danger" onclick="promptCancel(${t.ticketId})">Cancel</button>`
+            : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function promptCancel(ticketId) {
+    cancelTicketId = ticketId;
+    document.getElementById('cancel-overlay').classList.add('show');
+  }
+
+  function closeDialog() {
+    document.getElementById('cancel-overlay').classList.remove('show');
+    cancelTicketId = null;
+  }
+
+  document.getElementById('confirm-cancel-btn').addEventListener('click', async () => {
+    if (!cancelTicketId) return;
+    try {
+      await apiFetch(`/tickets/${cancelTicketId}`, { method: 'DELETE' });
+      showToast('Registration cancelled and refunded.', 'success');
+      closeDialog();
+      await loadTickets();
+    } catch (e) {
+      showToast(e.message || 'Failed to cancel.', 'error');
+      closeDialog();
+    }
+  });
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type}`;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3500);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadTickets();
+</script>
+</div>
+</body>
+</html>

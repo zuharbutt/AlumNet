@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alumni Profile — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .mentorship-btn-area { margin-top:24px; padding-top:20px; border-top:1px solid #eee; }
+    .status-badge { display:inline-block; padding:6px 14px; border-radius:20px; font-size:.85rem; font-weight:600; }
+    .badge-pending  { background:#fff3e0; color:#e65100; }
+    .badge-accepted { background:#e8f5e9; color:#2e7d32; }
+    .badge-rejected { background:#fce4ec; color:#b71c1c; }
+
+    /* Modal */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal-box { background:#fff; border-radius:10px; padding:28px; width:100%; max-width:480px; box-shadow:0 8px 32px rgba(0,0,0,.18); }
+    .modal-box h3 { margin:0 0 16px; font-size:1.1rem; }
+    .modal-box textarea { width:100%; box-sizing:border-box; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:.93rem; resize:vertical; min-height:100px; font-family:inherit; }
+    .modal-box textarea:focus { outline:none; border-color:#1565c0; }
+    .char-counter { font-size:.78rem; color:#888; text-align:right; margin-top:4px; }
+    .char-counter.warn  { color:#e65100; }
+    .char-counter.error { color:#c62828; }
+    .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+
+<div class="sb-page">
+  <a href="alumni-directory.html" style="font-size:.9rem;color:#666;display:inline-block;margin-bottom:16px;">← Back to Directory</a>
+  <div id="content-area"><div class="spinner"></div></div>
+</div>
+
+<!-- Mentorship Request Modal -->
+<div class="modal-overlay" id="mentorship-modal">
+  <div class="modal-box">
+    <h3>Request Mentorship</h3>
+    <p style="font-size:.88rem;color:#555;margin-bottom:12px;">Write a short message introducing yourself and explaining why you'd like mentorship from this alumnus.</p>
+    <textarea id="mentor-message" maxlength="500" placeholder="Hi, I am a 3rd year Computer Science student interested in software engineering. I would love to learn from your experience at..."></textarea>
+    <div class="char-counter" id="char-counter">0 / 500 (minimum 20)</div>
+    <div id="modal-error" style="color:#c62828;font-size:.85rem;margin-top:8px;display:none;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="submit-btn" disabled onclick="submitRequest()">Send Request</button>
+    </div>
+  </div>
+</div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script src="../../js/utils.js"></script>
+<script>
+  requireAuth(['Student', 'Admin']);
+  renderSidebar('Alumni Profile');
+
+  const params   = new URLSearchParams(window.location.search);
+  const alumniId = parseInt(params.get('id'));
+  let   currentStatus = null;
+
+  if (!alumniId) {
+    document.getElementById('content-area').innerHTML =
+      '<div class="no-results">Invalid profile link.</div>';
+  } else {
+    loadProfile(alumniId);
+  }
+
+  async function loadProfile(id) {
+    const area = document.getElementById('content-area');
+    try {
+      const [profileRes, statusRes] = await Promise.all([
+        apiFetch('/alumni/' + id),
+        getUser().role === 'Student' ? apiFetch('/mentorship/status?alumniId=' + id) : Promise.resolve({ data: null }),
+      ]);
+
+      const p = profileRes.data;
+      const s = statusRes.data;
+      if (s) currentStatus = s;
+
+      const emailDisplay = p.contactVisible
+        ? '<span class="val">' + escHtml(p.email) + '</span>'
+        : '<span class="contact-hidden tag-connect">Connect to view</span>';
+
+      const phoneDisplay = p.contactVisible
+        ? (p.phone ? '<span class="val">' + escHtml(p.phone) + '</span>'
+                   : '<span class="val" style="color:#aaa;">Not provided</span>')
+        : '<span class="contact-hidden tag-connect">Connect to view</span>';
+
+      const linkedInHtml = p.linkedInUrl
+        ? '<div class="profile-row"><span class="lbl">LinkedIn</span><span class="val"><a href="' + escAttr(p.linkedInUrl) + '" target="_blank" rel="noopener">View Profile</a></span></div>'
+        : '';
+
+      const professionalSection = (p.currentCompany || p.industry || p.workLocation || p.linkedInUrl) ? (
+        '<div class="profile-section"><h4>Professional</h4>' +
+        (p.currentCompany ? '<div class="profile-row"><span class="lbl">Company</span><span class="val">'   + escHtml(p.currentCompany) + '</span></div>' : '') +
+        (p.jobTitle       ? '<div class="profile-row"><span class="lbl">Job Title</span><span class="val">' + escHtml(p.jobTitle)       + '</span></div>' : '') +
+        (p.industry       ? '<div class="profile-row"><span class="lbl">Industry</span><span class="val">'  + escHtml(p.industry)       + '</span></div>' : '') +
+        (p.workLocation   ? '<div class="profile-row"><span class="lbl">Location</span><span class="val">'  + escHtml(p.workLocation)   + '</span></div>' : '') +
+        linkedInHtml + '</div>'
+      ) : '';
+
+      const bioSection = p.shortBio
+        ? '<div class="profile-section"><h4>Bio</h4><p style="font-size:.93rem;line-height:1.6;color:#444;">' + escHtml(p.shortBio) + '</p></div>'
+        : '';
+
+      const contactNote = !p.contactVisible
+        ? '<p style="font-size:.82rem;color:#888;margin-top:4px;">Contact info is visible after a mentorship is accepted.</p>'
+        : '';
+
+      area.innerHTML =
+        '<div class="profile-detail">' +
+          '<div class="profile-header">' +
+            '<h2>' + escHtml(p.fullName) + '</h2>' +
+            '<div class="subtitle">' +
+              (p.jobTitle ? escHtml(p.jobTitle) : '') +
+              (p.jobTitle && p.currentCompany ? ' at ' : '') +
+              (p.currentCompany ? '<strong>' + escHtml(p.currentCompany) + '</strong>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="profile-section"><h4>Academic</h4>' +
+            '<div class="profile-row"><span class="lbl">Department</span><span class="val">'      + escHtml(p.departmentName) + '</span></div>' +
+            '<div class="profile-row"><span class="lbl">Degree</span><span class="val">'          + escHtml(p.degreeProgram)  + '</span></div>' +
+            '<div class="profile-row"><span class="lbl">Graduation Year</span><span class="val">' + p.graduationYear          + '</span></div>' +
+          '</div>' +
+          professionalSection +
+          '<div class="profile-section"><h4>Contact</h4>' +
+            '<div class="profile-row"><span class="lbl">Email</span>' + emailDisplay + '</div>' +
+            '<div class="profile-row"><span class="lbl">Phone</span>' + phoneDisplay + '</div>' +
+            contactNote +
+          '</div>' +
+          bioSection +
+          '<div class="mentorship-btn-area" id="mentorship-action"></div>' +
+        '</div>';
+
+      renderMentorshipAction();
+    } catch (err) {
+      area.innerHTML = '<div class="no-results" style="color:#c62828;">' + escHtml(err.message || 'Failed to load profile.') + '</div>';
+    }
+  }
+
+  function renderMentorshipAction() {
+    const area = document.getElementById('mentorship-action');
+    if (!area) return;
+
+    const role = getUser().role;
+    if (role !== 'Student') { area.innerHTML = ''; return; }
+
+    const s = currentStatus;
+
+    if (!s || !s.hasRequest) {
+      area.innerHTML =
+        '<button class="btn btn-primary" style="max-width:220px;" onclick="openModal()">Request Mentorship</button>' +
+        '<p style="font-size:.8rem;color:#888;margin-top:8px;">Send a mentorship request to connect with this alumnus.</p>';
+      return;
+    }
+
+    if (s.status === 'Pending') {
+      area.innerHTML =
+        '<button class="btn btn-primary" style="max-width:220px;opacity:.6;cursor:not-allowed;" disabled>⏳ Request Pending...</button>' +
+        '<p style="font-size:.8rem;color:#888;margin-top:8px;">Your request is awaiting a response. <a href="my-requests.html">View in My Requests</a></p>';
+      return;
+    }
+
+    if (s.status === 'Accepted') {
+      area.innerHTML =
+        '<span class="status-badge badge-accepted">✓ Mentoring</span>' +
+        '<p style="font-size:.8rem;color:#2e7d32;margin-top:8px;">Your mentorship request was accepted. Contact details above are now visible.</p>';
+      return;
+    }
+
+    if (s.status === 'Rejected') {
+      area.innerHTML =
+        '<button class="btn btn-primary" style="max-width:220px;opacity:.6;cursor:not-allowed;background:#b71c1c;" disabled>Request Rejected</button>' +
+        '<p style="font-size:.8rem;color:#888;margin-top:8px;">This alumnus declined your request.</p>';
+      return;
+    }
+
+    // Cancelled or Expired — allow new request
+    area.innerHTML =
+      '<button class="btn btn-primary" style="max-width:220px;" onclick="openModal()">Request Mentorship</button>' +
+      '<p style="font-size:.8rem;color:#888;margin-top:8px;">Your previous request was ' + escHtml(s.status.toLowerCase()) + '. You may send a new one.</p>';
+  }
+
+  // Modal logic
+  function openModal() {
+    document.getElementById('mentorship-modal').classList.add('open');
+    document.getElementById('mentor-message').value = '';
+    document.getElementById('modal-error').style.display = 'none';
+    updateCounter();
+    document.getElementById('mentor-message').focus();
+  }
+
+  function closeModal() {
+    document.getElementById('mentorship-modal').classList.remove('open');
+  }
+
+  document.getElementById('mentor-message').addEventListener('input', updateCounter);
+
+  function updateCounter() {
+    const len = document.getElementById('mentor-message').value.length;
+    const counter = document.getElementById('char-counter');
+    const btn = document.getElementById('submit-btn');
+
+    counter.textContent = len + ' / 500' + (len < 20 ? ' (minimum 20)' : '');
+    counter.className = 'char-counter' + (len < 20 ? ' warn' : len > 480 ? ' warn' : '');
+    btn.disabled = len < 20 || len > 500;
+  }
+
+  async function submitRequest() {
+    const msg = document.getElementById('mentor-message').value.trim();
+    const errEl = document.getElementById('modal-error');
+    const btn   = document.getElementById('submit-btn');
+
+    errEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    try {
+      await apiFetch('/mentorship/request', {
+        method: 'POST',
+        body: JSON.stringify({ alumniId: alumniId, message: msg }),
+      });
+
+      closeModal();
+      showToast('Mentorship request sent!', 'success');
+
+      // Refresh button state
+      const statusRes = await apiFetch('/mentorship/status?alumniId=' + alumniId);
+      currentStatus = statusRes.data;
+      renderMentorshipAction();
+    } catch (err) {
+      errEl.textContent = err.message || 'Failed to send request.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Send Request';
+    }
+  }
+
+  // Close modal on overlay click
+  document.getElementById('mentorship-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</div>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Donate — AlumniMS</title>
+  <link rel="stylesheet" href="../../css/main.css" />
+  <link rel="stylesheet" href="../../css/sidebar.css" />
+  <style>
+    .donate-card { background:#fff; border-radius:8px; padding:2rem; max-width:600px; margin:2rem auto; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .campaign-summary { background:#f8f9fa; border-radius:6px; padding:1rem; margin-bottom:1.5rem; }
+    .campaign-summary h3 { margin:0 0 .5rem; }
+    .campaign-summary .desc { font-size:.88rem; color:#555; margin:.25rem 0; }
+    .progress { height:10px; background:#e9ecef; border-radius:5px; margin:.5rem 0; }
+    .progress-bar { height:100%; background:#198754; border-radius:5px; }
+    .meta { display:flex; justify-content:space-between; font-size:.82rem; color:#666; margin-top:.25rem; }
+    .alert-mock { background:#fff3cd; border:2px solid #ffc107; color:#664d03; border-radius:6px; padding:1rem 1.25rem; margin-bottom:1.5rem; font-weight:700; font-size:1rem; text-align:center; }
+    .preset-btns { display:flex; gap:.5rem; flex-wrap:wrap; margin:.5rem 0 1rem; }
+    .preset-btns button { padding:.45rem 1rem; border:1px solid #0d6efd; background:#fff; color:#0d6efd; border-radius:4px; cursor:pointer; font-size:.9rem; }
+    .preset-btns button:hover, .preset-btns button.active { background:#0d6efd; color:#fff; }
+    input[type="number"] { width:100%; padding:.5rem .75rem; border:1px solid #ccc; border-radius:4px; font-size:.95rem; box-sizing:border-box; }
+    .err { color:#dc3545; font-size:.82rem; margin-top:.25rem; display:none; }
+    .checkbox-row { display:flex; align-items:center; gap:.5rem; margin-top:.75rem; }
+    .checkbox-row label { font-size:.92rem; cursor:pointer; }
+    .btn { padding:.55rem 1.25rem; border:none; border-radius:4px; cursor:pointer; font-size:.95rem; text-decoration:none; display:inline-block; }
+    .btn-primary   { background:#0d6efd; color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .btn-row { display:flex; gap:.75rem; margin-top:1.5rem; }
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; padding:.85rem 1.25rem; border-radius:6px; color:#fff; font-size:.9rem; display:none; z-index:9999; }
+    .toast.success { background:#198754; }
+    .toast.error   { background:#dc3545; }
+    .spinner { display:none; text-align:center; color:#888; padding:.5rem; }
+  </style>
+</head>
+<body>
+<div id="sidebar"></div>
+
+<div id="main-content">
+  <div id="topbar"></div>
+
+<div class="donate-card">
+  <h2>Donate to Campaign</h2>
+
+  <div class="campaign-summary" id="campaign-summary">
+    <p>Loading campaign details...</p>
+  </div>
+
+  <div class="alert-mock">
+    This is a simulated donation. No real payment will be made.
+  </div>
+
+  <label style="font-weight:600;font-size:.9rem;display:block;margin-bottom:.35rem">Amount (Rs) *</label>
+  <div class="preset-btns" id="presets">
+    <button onclick="setPreset(1000)">Rs 1,000</button>
+    <button onclick="setPreset(5000)">Rs 5,000</button>
+    <button onclick="setPreset(10000)">Rs 10,000</button>
+    <button onclick="setPreset(25000)">Rs 25,000</button>
+    <button onclick="setPreset(null)">Custom</button>
+  </div>
+  <input type="number" id="amount" min="1" max="1000000" step="1" placeholder="Enter amount" oninput="clearPresets()" />
+  <div class="err" id="err-amount">Amount must be between 1 and 1,000,000.</div>
+
+  <div class="checkbox-row">
+    <input type="checkbox" id="isAnonymous" />
+    <label for="isAnonymous">Donate Anonymously (your name will be hidden)</label>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" id="btn-confirm" onclick="confirmDonation()">Confirm Donation</button>
+    <a href="/frontend/pages/shared/donations.html" class="btn btn-secondary">Cancel</a>
+  </div>
+  <div class="spinner" id="spinner">Processing donation...</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="../../js/config.js"></script>
+<script src="../../js/auth.js"></script>
+<script src="../../js/api.js"></script>
+<script src="../../js/guards.js"></script>
+<script src="../../js/sidebar.js"></script>
+<script>
+  requireAuth(['Alumni']);
+  renderSidebar('Make a Donation');
+
+  const urlParams  = new URLSearchParams(location.search);
+  const campaignId = parseInt(urlParams.get('id'));
+
+  if (!campaignId) {
+    location.href = '/frontend/pages/shared/donations.html';
+  }
+
+  async function loadCampaign() {
+    let res;
+    try { res = await apiFetch(`/campaigns/${campaignId}`); } catch(e) { showToast(e.message||'Failed to load campaign.','error'); return; }
+    const c   = res.data;
+    const pct = Math.min(c.progressPercent, 100).toFixed(1);
+
+    if (c.status !== 'Active' || new Date(c.endDate) <= new Date()) {
+      document.getElementById('btn-confirm').disabled = true;
+      document.getElementById('btn-confirm').textContent = 'Campaign Closed';
+    }
+
+    document.getElementById('campaign-summary').innerHTML = `
+      <h3>${esc(c.title)}</h3>
+      <p class="desc">${esc(c.description.length > 200 ? c.description.slice(0,200)+'…' : c.description)}</p>
+      <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
+      <div class="meta">
+        <span>Rs ${c.raisedAmount.toLocaleString()} raised of Rs ${c.targetAmount.toLocaleString()}</span>
+        <span>${pct}%</span>
+      </div>
+      <div class="meta"><span>Ends: ${new Date(c.endDate).toLocaleDateString()}</span></div>`;
+  }
+
+  function setPreset(val) {
+    clearPresets();
+    if (val !== null) {
+      document.getElementById('amount').value = val;
+      event.target.classList.add('active');
+    } else {
+      document.getElementById('amount').value = '';
+      document.getElementById('amount').focus();
+    }
+  }
+
+  function clearPresets() {
+    document.querySelectorAll('#presets button').forEach(b => b.classList.remove('active'));
+  }
+
+  async function confirmDonation() {
+    const amtStr = document.getElementById('amount').value;
+    const amt    = parseFloat(amtStr);
+    const errEl  = document.getElementById('err-amount');
+
+    if (isNaN(amt) || amt <= 0 || amt > 1_000_000) {
+      errEl.style.display = 'block';
+      return;
+    }
+    errEl.style.display = 'none';
+
+    document.getElementById('btn-confirm').disabled  = true;
+    document.getElementById('spinner').style.display = 'block';
+
+    const body = {
+      campaignId:  campaignId,
+      amount:      amt,
+      isAnonymous: document.getElementById('isAnonymous').checked,
+    };
+
+    try {
+      await apiFetch('/donations', { method:'POST', body: JSON.stringify(body) });
+      document.getElementById('spinner').style.display = 'none';
+      showToast('Thank you for your donation!', 'success');
+      setTimeout(() => location.href = '/frontend/pages/shared/donations.html', 2000);
+    } catch(e) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('btn-confirm').disabled = false;
+      showToast(e.message || 'Donation failed.', 'error');
+    }
+  }
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = `toast ${type}`; t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 3500);
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  loadCampaign();
+</script>
+</div>
+</body>
+</html>
