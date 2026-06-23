@@ -1,6 +1,6 @@
-# Alumni Management System (AlumniMS)
+# Alumni Management System (AlumniNet)
 
-A premium, feature-rich web application designed to connect university alumni and current students, facilitate professional mentorship, manage events and ticketing, run donation campaigns, and provide administrators with powerful dashboards and reporting.
+A premium, feature-rich web application designed to connect university alumni and current students, facilitate professional mentorship, manage events and ticketing, run donation campaigns, and provide administrators with powerful dashboards and reporting (screenshots attached at end) .
 
 ---
 
@@ -149,3 +149,27 @@ AlumniManagementSystem/
     ├── js/              # Client-side routing, API fetches, auth guards
     └── pages/           # Portal-specific dashboard views (student, alumni, admin)
 ```
+<img width="1908" height="874" alt="image" src="https://github.com/user-attachments/assets/47cd6eb5-6c39-4d68-a846-26c887efbda2" />
+
+<img width="1341" height="444" alt="image" src="https://github.com/user-attachments/assets/de970876-fea3-4eea-95b6-2b5a9423f3a9" />
+
+<img width="1435" height="864" alt="image" src="https://github.com/user-attachments/assets/4556545d-1e61-4a92-807f-d40a57bbfa03" />
+
+<img width="1345" height="704" alt="image" src="https://github.com/user-attachments/assets/1080288c-f754-4ff6-88f3-95b1d93b179b" />
+
+<img width="1658" height="857" alt="image" src="https://github.com/user-attachments/assets/9a2a9624-72d4-47bf-9830-2a2bb31eacaf" />
+
+ADMIN:
+
+<img width="1727" height="876" alt="image" src="https://github.com/user-attachments/assets/001e5aea-7498-403d-b174-c3ae21d35457" />
+
+<img width="1764" height="861" alt="image" src="https://github.com/user-attachments/assets/e78f362d-7463-42a8-bd97-b734e3e0c42a" />
+
+<img width="1791" height="864" alt="image" src="https://github.com/user-attachments/assets/485db559-e2b3-44fe-bcb8-16a68c4ca4e5" />
+
+<img width="1880" height="866" alt="image" src="https://github.com/user-attachments/assets/37ba9187-85f8-4cda-803c-c8eb25881d60" />
+
+
+
+
+
